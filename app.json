@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "GENBAAlarm",
+    "slug": "genba-alarm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.genba.alarm",
+      "adaptiveIcon": {
+        "backgroundColor": "#4A6CF7",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-intent-launcher"
+    ]
+  }
+}
