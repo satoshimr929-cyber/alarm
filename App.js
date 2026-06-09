@@ -161,6 +161,18 @@ export default function App() {
         );
       }
 
+      // Android 12以降: 正確なアラーム権限を確認
+      if (Platform.OS === 'android' && Platform.Version >= 31) {
+        const notifeeSettings = await notifee.getNotificationSettings();
+        if (!notifeeSettings.android.alarm) {
+          Alert.alert(
+            'アラーム権限が必要です',
+            '正確な時刻にアラームを鳴らすには「アラームと時計」の権限が必要です。次の画面で許可してください。',
+            [{ text: '設定を開く', onPress: () => notifee.openAlarmPermissionSettings() }]
+          );
+        }
+      }
+
       // チャンネル作成（ALARM カテゴリ、bypassDnd、HIGH）
       await ensureChannel();
 
@@ -313,7 +325,16 @@ export default function App() {
         setPending([]);
       }
     } catch (e) {
-      Alert.alert('エラー', e.message);
+      const msg = e.message || '';
+      if (msg.includes('SCHEDULE_EXACT_ALARM') || msg.includes('exact alarm')) {
+        Alert.alert(
+          'アラーム権限エラー',
+          '設定 → アプリ → GENBAAlarm → 「アラームと時計」を許可してください。',
+          [{ text: '設定を開く', onPress: () => notifee.openAlarmPermissionSettings() }]
+        );
+      } else {
+        Alert.alert('エラー', msg);
+      }
     } finally {
       setSetting(false);
     }
