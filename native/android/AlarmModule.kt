@@ -39,12 +39,10 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun openFullScreenIntentSettings(promise: Promise) {
         if (Build.VERSION.SDK_INT >= 34) {
-            reactContext.startActivity(
-                Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS).apply {
-                    data = android.net.Uri.parse("package:${reactContext.packageName}")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
+            val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS)
+            intent.data = android.net.Uri.parse("package:${reactContext.packageName}")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            reactContext.startActivity(intent)
         }
         promise.resolve(null)
     }
