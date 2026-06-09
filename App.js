@@ -15,6 +15,14 @@ import * as IntentLauncher from 'expo-intent-launcher';
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
+function showToast(msg) {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(msg, ToastAndroid.SHORT);
+  } else {
+    Alert.alert(msg);
+  }
+}
+
 function DrumRoll({ items, selected, onSelect, label }) {
   return (
     <View style={styles.drumRollContainer}>
@@ -41,14 +49,34 @@ function DrumRoll({ items, selected, onSelect, label }) {
   );
 }
 
-function AlarmListItem({ alarm, onDelete }) {
+function PendingAlarmItem({ alarm, onRemove }) {
   return (
     <View style={styles.alarmItem}>
       <Text style={styles.alarmItemTime}>
         {String(alarm.hour).padStart(2, '0')}:{String(alarm.minute).padStart(2, '0')}
       </Text>
-      <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
-        <Text style={styles.deleteButtonText}>✕</Text>
+      <TouchableOpacity onPress={onRemove} style={styles.iconButton}>
+        <Text style={styles.iconButtonText}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function SetAlarmItem({ alarm, onDelete, deleting }) {
+  return (
+    <View style={[styles.alarmItem, styles.setAlarmItem]}>
+      <View style={styles.setAlarmLeft}>
+        <Text style={styles.setAlarmBadge}>セット済</Text>
+        <Text style={styles.alarmItemTime}>
+          {String(alarm.hour).padStart(2, '0')}:{String(alarm.minute).padStart(2, '0')}
+        </Text>
+      </View>
+      <TouchableOpacity
+        onPress={onDelete}
+        style={[styles.iconButton, deleting && styles.iconButtonDisabled]}
+        disabled={deleting}
+      >
+        <Text style={[styles.iconButtonText, styles.deleteIconText]}>🗑</Text>
       </TouchableOpacity>
     </View>
   );
@@ -58,30 +86,28 @@ export default function App() {
   const now = new Date();
   const [hour, setHour] = useState(now.getHours());
   const [minute, setMinute] = useState(now.getMinutes());
-  const [alarms, setAlarms] = useState([]);
+  // セット前のリスト
+  const [pending, setPending] = useState([]);
+  // セット済みのリスト（削除対象）
+  const [setAlarms, setSetAlarms] = useState([]);
   const [setting, setSetting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
-  function addAlarm() {
-    const duplicate = alarms.some((a) => a.hour === hour && a.minute === minute);
+  function addToPending() {
+    const duplicate =
+      pending.some((a) => a.hour === hour && a.minute === minute) ||
+      setAlarms.some((a) => a.hour === hour && a.minute === minute);
     if (duplicate) {
-      showToast('同じ時刻は追加済みです');
+      showToast('同じ時刻は既に追加済みです');
       return;
     }
-    const next = [...alarms, { hour, minute, id: Date.now() }];
+    const next = [...pending, { hour, minute, id: Date.now() }];
     next.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-    setAlarms(next);
+    setPending(next);
   }
 
-  function removeAlarm(id) {
-    setAlarms((prev) => prev.filter((a) => a.id !== id));
-  }
-
-  function showToast(msg) {
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(msg, ToastAndroid.SHORT);
-    } else {
-      Alert.alert(msg);
-    }
+  function removeFromPending(id) {
+    setPending((prev) => prev.filter((a) => a.id !== id));
   }
 
   async function setAllAlarms() {
@@ -89,7 +115,7 @@ export default function App() {
       Alert.alert('Android専用', 'この機能はAndroidのみ対応しています。');
       return;
     }
-    const targets = alarms.length > 0 ? alarms : [{ hour, minute }];
+    const targets = pending.length > 0 ? pending : [{ hour, minute, id: Date.now() }];
     setSetting(true);
     try {
       for (const alarm of targets) {
@@ -97,8 +123,6 @@ export default function App() {
           extra: {
             'android.intent.extra.alarm.HOUR': alarm.hour,
             'android.intent.extra.alarm.MINUTES': alarm.minute,
-            // SKIP_UI=true でアラームアプリのUIを開かずにバックグラウンドでセット
-            // 一部機種では無視される場合があるが、これが標準intentで可能な最善策
             'android.intent.extra.alarm.SKIP_UI': true,
             'android.intent.extra.alarm.MESSAGE': 'GENBAAlarm',
             'android.intent.extra.alarm.VIBRATE': true,
@@ -107,10 +131,14 @@ export default function App() {
       }
       const label =
         targets.length === 1
-          ? `${String(targets[0].hour).padStart(2, '0')}:${String(targets[0].minute).padStart(2, '0')} にアラームをセットしました`
+          ? `${String(targets[0].hour).padStart(2, '0')}:${String(targets[0].minute).padStart(2, '0')} をセットしました`
           : `${targets.length}件のアラームをセットしました`;
       showToast(label);
-      setAlarms([]);
+      // セット済みリストに移動
+      const next = [...setAlarms, ...targets];
+      next.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+      setSetAlarms(next);
+      setPending([]);
     } catch (e) {
       Alert.alert('エラー', 'アラームのセットに失敗しました: ' + e.message);
     } finally {
@@ -118,8 +146,31 @@ export default function App() {
     }
   }
 
+  async function deleteSetAlarm(alarm) {
+    setDeletingId(alarm.id);
+    try {
+      await IntentLauncher.startActivityAsync('android.intent.action.DISMISS_ALARM', {
+        extra: {
+          // 時刻で一致するアラームを検索して削除
+          'android.intent.extra.alarm.SEARCH_MODE': 'android.intent.extra.alarm.SEARCH_MODE_TIME',
+          'android.intent.extra.alarm.HOUR': alarm.hour,
+          'android.intent.extra.alarm.MINUTES': alarm.minute,
+          'android.intent.extra.alarm.SKIP_UI': true,
+        },
+      });
+      setSetAlarms((prev) => prev.filter((a) => a.id !== alarm.id));
+      showToast(
+        `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} を削除しました`
+      );
+    } catch (e) {
+      Alert.alert('削除エラー', '削除に失敗しました: ' + e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <StatusBar style="dark" />
       <Text style={styles.title}>GENBAAlarm</Text>
       <Text style={styles.subtitle}>時刻を選択してください</Text>
@@ -136,14 +187,19 @@ export default function App() {
         <DrumRoll items={MINUTES} selected={minute} onSelect={setMinute} label="分" />
       </View>
 
-      <TouchableOpacity style={styles.addButton} onPress={addAlarm} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.addButton} onPress={addToPending} activeOpacity={0.7}>
         <Text style={styles.addButtonText}>＋ リストに追加</Text>
       </TouchableOpacity>
 
-      {alarms.length > 0 && (
-        <View style={styles.alarmList}>
-          {alarms.map((alarm) => (
-            <AlarmListItem key={alarm.id} alarm={alarm} onDelete={() => removeAlarm(alarm.id)} />
+      {pending.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>セット予定</Text>
+          {pending.map((alarm) => (
+            <PendingAlarmItem
+              key={alarm.id}
+              alarm={alarm}
+              onRemove={() => removeFromPending(alarm.id)}
+            />
           ))}
         </View>
       )}
@@ -157,22 +213,41 @@ export default function App() {
         <Text style={styles.buttonText}>
           {setting
             ? 'セット中...'
-            : alarms.length > 0
-            ? `${alarms.length}件のアラームをセット`
+            : pending.length > 0
+            ? `${pending.length}件のアラームをセット`
             : 'アラームをセット'}
         </Text>
       </TouchableOpacity>
-    </View>
+
+      {setAlarms.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            セット済み
+            <Text style={styles.sectionNote}>　※削除は機種依存</Text>
+          </Text>
+          {setAlarms.map((alarm) => (
+            <SetAlarmItem
+              key={alarm.id}
+              alarm={alarm}
+              onDelete={() => deleteSetAlarm(alarm)}
+              deleting={deletingId === alarm.id}
+            />
+          ))}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#F0F4FF',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 32,
@@ -259,10 +334,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  alarmList: {
+  section: {
     width: '100%',
     marginBottom: 16,
-    maxHeight: 160,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  sectionNote: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#BBB',
   },
   alarmItem: {
     flexDirection: 'row',
@@ -275,19 +362,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D0D8FF',
   },
-  alarmItemTime: {
+  setAlarmItem: {
+    borderColor: '#B8C8FF',
+    backgroundColor: '#F5F7FF',
+  },
+  setAlarmLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  setAlarmBadge: {
+    fontSize: 10,
+    color: '#4A6CF7',
+    backgroundColor: '#E8ECFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontWeight: '600',
+  },
+  alarmItemTime: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1A1A2E',
     letterSpacing: 2,
   },
-  deleteButton: {
-    padding: 4,
+  iconButton: {
+    padding: 6,
   },
-  deleteButtonText: {
+  iconButtonDisabled: {
+    opacity: 0.3,
+  },
+  iconButtonText: {
     fontSize: 16,
     color: '#999',
+  },
+  deleteIconText: {
+    fontSize: 18,
   },
   button: {
     backgroundColor: '#4A6CF7',
@@ -299,6 +410,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 6,
+    marginBottom: 24,
   },
   buttonDisabled: {
     backgroundColor: '#AAB4E8',
