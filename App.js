@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as IntentLauncher from 'expo-intent-launcher';
 import notifee, { AndroidCategory, AndroidImportance, EventType, TriggerType } from '@notifee/react-native';
 import {
   getAlarmsForDate,
@@ -24,7 +25,6 @@ import {
   registerBackgroundTask,
   scheduleAutoNotification,
   ensureChannel,
-  CHANNEL_ID,
 } from './src/backgroundTask';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -284,81 +284,52 @@ export default function App() {
     const targets = pending.length > 0 ? pending : [{ hour, minute, id: Date.now() }];
     setSetting(true);
     try {
-      const scheduled = [];
       for (const alarm of targets) {
-        const trigger = new Date();
-        trigger.setHours(alarm.hour, alarm.minute, 0, 0);
-        if (trigger <= new Date()) {
-          // 過去の時刻は翌日にスケジュール（ACTION_SET_ALARMと同じ挙動）
-          trigger.setDate(trigger.getDate() + 1);
-        }
-        const notifeeId = await notifee.createTriggerNotification(
-          {
-            title: 'GENBAAlarm',
-            body: `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} のアラームです`,
-            android: {
-              channelId: CHANNEL_ID,
-              category: AndroidCategory.ALARM,
-              importance: AndroidImportance.HIGH,
-              sound: 'default',
-              bypassDnd: true,
-              fullScreenAction: { id: 'default' },
-              pressAction: { id: 'default', launchActivity: 'default' },
-            },
+        await IntentLauncher.startActivityAsync('android.intent.action.SET_ALARM', {
+          extra: {
+            'android.intent.extra.alarm.HOUR': alarm.hour,
+            'android.intent.extra.alarm.MINUTES': alarm.minute,
+            'android.intent.extra.alarm.SKIP_UI': true,
+            'android.intent.extra.alarm.MESSAGE': 'GENBAAlarm',
+            'android.intent.extra.alarm.VIBRATE': true,
           },
-          {
-            type: TriggerType.TIMESTAMP,
-            timestamp: trigger.getTime(),
-            alarmManager: { allowWhileIdle: true },
-          }
-        );
-        const isTomorrow = trigger.getDate() !== new Date().getDate();
-        scheduled.push({ ...alarm, notifeeId, isTomorrow });
+        });
       }
-      if (scheduled.length > 0) {
-        const label =
-          scheduled.length === 1
-            ? `${scheduled[0].isTomorrow ? '明日' : '今日'} ${String(scheduled[0].hour).padStart(2, '0')}:${String(scheduled[0].minute).padStart(2, '0')} をセットしました`
-            : `${scheduled.length}件をセットしました`;
-        showToast(label);
-        const next = [...setAlarms, ...scheduled].sort(
-          (a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
-        );
-        setSetAlarms(next);
-        setPending([]);
-      }
+      const label =
+        targets.length === 1
+          ? `${String(targets[0].hour).padStart(2, '0')}:${String(targets[0].minute).padStart(2, '0')} をセットしました`
+          : `${targets.length}件をセットしました`;
+      showToast(label);
+      const next = [...setAlarms, ...targets].sort(
+        (a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
+      );
+      setSetAlarms(next);
+      setPending([]);
     } catch (e) {
-      const msg = e.message || '';
-      if (msg.includes('SCHEDULE_EXACT_ALARM') || msg.includes('exact alarm')) {
-        Alert.alert(
-          'アラーム権限エラー',
-          '設定 → アプリ → GENBAAlarm → 「アラームと時計」を許可してください。',
-          [{ text: '設定を開く', onPress: () => notifee.openAlarmPermissionSettings() }]
-        );
-      } else {
-        Alert.alert('エラー', msg);
-      }
+      Alert.alert('エラー', e.message);
     } finally {
       setSetting(false);
     }
   }
 
-  // セット済みを削除（リストから削除 + notifee キャンセル）
-  async function deleteSetAlarm(alarm) {
-    setDeletingId(alarm.id);
-    try {
-      if (alarm.notifeeId) {
-        await notifee.cancelTriggerNotification(alarm.notifeeId).catch(() => {});
-      }
-      setSetAlarms((prev) => prev.filter((a) => a.id !== alarm.id));
-      showToast(
-        `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} を削除しました`
-      );
-    } catch (e) {
-      Alert.alert('削除エラー', e.message);
-    } finally {
-      setDeletingId(null);
-    }
+  // セット済みをリストから削除（システムアラームはユーザーが手動削除）
+  function deleteSetAlarm(alarm) {
+    const timeStr = `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')}`;
+    Alert.alert(
+      `${timeStr} を削除`,
+      'このアプリのリストから削除します。\n端末の時計アプリのアラームも手動で削除してください。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: () => {
+            setSetAlarms((prev) => prev.filter((a) => a.id !== alarm.id));
+            showToast(`${timeStr} をリストから削除しました`);
+          },
+        },
+      ]
+    );
   }
 
   // 設定保存
