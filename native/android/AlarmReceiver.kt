@@ -30,7 +30,9 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
@@ -47,10 +49,24 @@ class AlarmReceiver : BroadcastReceiver() {
             setOngoing(true)
             setAutoCancel(false)
             setVisibility(Notification.VISIBILITY_PUBLIC)
+            setContentIntent(fullScreenPi)
         }.build()
 
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(alarmId, notification)
+        nm.notify(alarmId, notif)
+
+        // Android 10未満 または USE_FULL_SCREEN_INTENT許可済み → 直接起動も試みる
+        val canDirectStart = if (Build.VERSION.SDK_INT >= 34) {
+            nm.canUseFullScreenIntent()
+        } else {
+            true
+        }
+        if (canDirectStart) {
+            try {
+                context.startActivity(activityIntent)
+            } catch (_: Exception) {
+                // 通知のfullScreenIntentにフォールバック
+            }
+        }
     }
 
     companion object {

@@ -45,3 +45,13 @@ export async function openAlarmPermissionSettings() {
   if (Platform.OS !== 'android') return;
   return GENBAAlarmManager.openAlarmPermissionSettings();
 }
+
+export async function canUseFullScreenIntent() {
+  if (Platform.OS !== 'android') return true;
+  return GENBAAlarmManager.canUseFullScreenIntent();
+}
+
+export async function openFullScreenIntentSettings() {
+  if (Platform.OS !== 'android') return;
+  return GENBAAlarmManager.openFullScreenIntentSettings();
+}

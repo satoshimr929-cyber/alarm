@@ -27,6 +27,29 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun canUseFullScreenIntent(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val nm = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            promise.resolve(nm.canUseFullScreenIntent())
+        } else {
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun openFullScreenIntentSettings(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            reactContext.startActivity(
+                Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS).apply {
+                    data = android.net.Uri.parse("package:${reactContext.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }
+        promise.resolve(null)
+    }
+
+    @ReactMethod
     fun setAlarm(id: Int, timestamp: Double, label: String, promise: Promise) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {

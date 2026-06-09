@@ -17,6 +17,8 @@ import {
   cancelAlarm,
   canScheduleExactAlarms,
   openAlarmPermissionSettings,
+  canUseFullScreenIntent,
+  openFullScreenIntentSettings,
   makeAlarmId,
   makeLabel,
   makeTimestamp,
@@ -135,6 +137,16 @@ export default function App() {
           'アラーム権限が必要です',
           '正確な時刻にアラームを鳴らすには「アラームと時計」の権限が必要です。',
           [{ text: '設定を開く', onPress: () => openAlarmPermissionSettings() }]
+        );
+      }
+
+      // フルスクリーン表示権限チェック（Android 14+）
+      const canFullScreen = await canUseFullScreenIntent();
+      if (!canFullScreen) {
+        Alert.alert(
+          'フルスクリーン表示権限が必要です',
+          'ロック画面でアラームを自動表示するには「フルスクリーンの通知を表示」の権限が必要です。',
+          [{ text: '設定を開く', onPress: () => openFullScreenIntentSettings() }]
         );
       }
 
