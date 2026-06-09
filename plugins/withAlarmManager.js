@@ -91,18 +91,36 @@ module.exports = function withAlarmManager(config) {
     'android',
     (mod) => {
       const { platformProjectRoot } = mod.modRequest;
-      const mainAppPath = path.join(
+      const mainAppPath = require('path').join(
         platformProjectRoot,
         'app/src/main/java/com/genba/alarm/MainApplication.kt'
       );
-      if (fs.existsSync(mainAppPath)) {
-        let content = fs.readFileSync(mainAppPath, 'utf8');
+      if (require('fs').existsSync(mainAppPath)) {
+        let content = require('fs').readFileSync(mainAppPath, 'utf8');
         if (!content.includes('AlarmPackage')) {
-          content = content.replace(
-            'return packages',
-            'packages.add(AlarmPackage())\n            return packages'
-          );
-          fs.writeFileSync(mainAppPath, content, 'utf8');
+          // Try multiple patterns to handle different formatting
+          let replaced = false;
+          // Pattern 1: standard "return packages" with leading whitespace
+          if (!replaced && content.includes('return packages')) {
+            content = content.replace(
+              /( +)(return packages)/,
+              '$1packages.add(AlarmPackage())\n$1$2'
+            );
+            replaced = content.includes('AlarmPackage');
+          }
+          // Pattern 2: packages.also { } pattern
+          if (!replaced && content.includes('PackageList(this).packages')) {
+            content = content.replace(
+              'PackageList(this).packages',
+              'PackageList(this).packages.also { it.add(AlarmPackage()) }'
+            );
+            replaced = content.includes('AlarmPackage');
+          }
+          if (replaced) {
+            require('fs').writeFileSync(mainAppPath, content, 'utf8');
+          } else {
+            console.warn('[withAlarmManager] Could not inject AlarmPackage into MainApplication.kt');
+          }
         }
       }
       return mod;
