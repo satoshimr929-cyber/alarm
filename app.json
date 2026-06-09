@@ -30,8 +30,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "@notifee/react-native"
-    ]
+    "plugins": []
   }
 }
