@@ -47,6 +47,7 @@ function DrumRoll({ items, selected, onSelect, label, itemHeight = 48, visibleIt
         showsVerticalScrollIndicator={false}
         snapToInterval={itemHeight}
         decelerationRate="fast"
+        nestedScrollEnabled={true}
       >
         {items.map((item) => (
           <TouchableOpacity
