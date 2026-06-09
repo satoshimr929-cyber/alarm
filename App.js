@@ -71,12 +71,14 @@ function DrumRoll({ items, selected, onSelect, label, itemHeight = 48, visibleIt
 
 function AlarmRow({ alarm, onDelete, badge, badgeColor }) {
   const timeStr = `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')}`;
+  const dayLabel = alarm.isTomorrow ? '明日' : null;
   return (
     <View style={styles.alarmRow}>
       {badge && (
         <Text style={[styles.badge, { backgroundColor: badgeColor || '#4A6CF7' }]}>{badge}</Text>
       )}
       <Text style={styles.alarmRowTime}>{timeStr}</Text>
+      {dayLabel && <Text style={styles.dayLabel}>{dayLabel}</Text>}
       <TouchableOpacity onPress={onDelete} style={styles.rowDeleteBtn}>
         <Text style={styles.rowDeleteBtnText}>✕</Text>
       </TouchableOpacity>
@@ -287,8 +289,8 @@ export default function App() {
         const trigger = new Date();
         trigger.setHours(alarm.hour, alarm.minute, 0, 0);
         if (trigger <= new Date()) {
-          showToast(`${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} は既に過ぎています`);
-          continue;
+          // 過去の時刻は翌日にスケジュール（ACTION_SET_ALARMと同じ挙動）
+          trigger.setDate(trigger.getDate() + 1);
         }
         const notifeeId = await notifee.createTriggerNotification(
           {
@@ -310,12 +312,13 @@ export default function App() {
             alarmManager: { allowWhileIdle: true },
           }
         );
-        scheduled.push({ ...alarm, notifeeId });
+        const isTomorrow = trigger.getDate() !== new Date().getDate();
+        scheduled.push({ ...alarm, notifeeId, isTomorrow });
       }
       if (scheduled.length > 0) {
         const label =
           scheduled.length === 1
-            ? `${String(scheduled[0].hour).padStart(2, '0')}:${String(scheduled[0].minute).padStart(2, '0')} をセットしました`
+            ? `${scheduled[0].isTomorrow ? '明日' : '今日'} ${String(scheduled[0].hour).padStart(2, '0')}:${String(scheduled[0].minute).padStart(2, '0')} をセットしました`
             : `${scheduled.length}件をセットしました`;
         showToast(label);
         const next = [...setAlarms, ...scheduled].sort(
@@ -677,6 +680,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A2E',
     letterSpacing: 2,
+  },
+  dayLabel: {
+    fontSize: 11,
+    color: '#FF9F0A',
+    fontWeight: '600',
+    marginRight: 4,
   },
   rowDeleteBtn: {
     padding: 4,
