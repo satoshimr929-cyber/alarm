@@ -17,7 +17,9 @@
         "SCHEDULE_EXACT_ALARM",
         "USE_EXACT_ALARM",
         "VIBRATE",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "ACCESS_NOTIFICATION_POLICY",
+        "POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#4A6CF7",
@@ -29,12 +31,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-notifications",
-        {
-          "color": "#4A6CF7"
-        }
-      ]
+      "@notifee/react-native"
     ]
   }
 }

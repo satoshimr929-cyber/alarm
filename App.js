@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import * as IntentLauncher from 'expo-intent-launcher';
-import * as Notifications from 'expo-notifications';
+import notifee, { EventType } from '@notifee/react-native';
 import {
   getAlarmsForDate,
   getSettings,
@@ -24,16 +24,8 @@ import {
 import {
   registerBackgroundTask,
   scheduleAutoNotification,
+  ensureChannel,
 } from './src/backgroundTask';
-
-// フォアグラウンド中の通知表示設定
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
@@ -156,20 +148,20 @@ export default function App() {
   const [setting, setSetting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const notificationListener = useRef();
-  const responseListener = useRef();
-
   // 初期化
   useEffect(() => {
     (async () => {
       // 通知権限リクエスト
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
+      const settings = await notifee.requestPermission();
+      if (!settings.authorizationStatus) {
         Alert.alert(
           '通知権限',
           'バックグラウンド自動チェックには通知の許可が必要です。設定から許可してください。'
         );
       }
+
+      // チャンネル作成（ALARM カテゴリ、bypassDnd、HIGH）
+      await ensureChannel();
 
       // 設定ロード
       const s = await getSettings();
@@ -187,26 +179,17 @@ export default function App() {
       setTomorrowAlarms(saved);
     })();
 
-    // 通知受信リスナー（フォアグラウンド中）
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      const action = notification.request.content.data?.action;
-      if (action === 'auto_set') {
-        handleAutoSetFromNotification();
+    // フォアグラウンド中の通知イベント
+    const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) {
+        const action = detail.notification?.data?.action;
+        if (action === 'auto_set' || action === 'daily_check') {
+          handleAutoSetFromNotification();
+        }
       }
     });
 
-    // 通知タップリスナー（バックグラウンド→フォアグラウンド）
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const action = response.notification.request.content.data?.action;
-      if (action === 'auto_set' || action === 'daily_check') {
-        handleAutoSetFromNotification();
-      }
-    });
-
-    return () => {
-      Notifications.removeNotificationSubscription(notificationListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
-    };
+    return unsubscribe;
   }, []);
 
   // 通知タップ時: 明日分アラームを自動セット
@@ -314,18 +297,13 @@ export default function App() {
     }
   }
 
-  // セット済みを削除（ACTION_DISMISS_ALARM）
+  // セット済みを削除（リストから削除 + notifee キャンセル）
   async function deleteSetAlarm(alarm) {
     setDeletingId(alarm.id);
     try {
-      await IntentLauncher.startActivityAsync('android.intent.action.DISMISS_ALARM', {
-        extra: {
-          'android.intent.extra.alarm.SEARCH_MODE': 'android.intent.extra.alarm.SEARCH_MODE_TIME',
-          'android.intent.extra.alarm.HOUR': alarm.hour,
-          'android.intent.extra.alarm.MINUTES': alarm.minute,
-          'android.intent.extra.alarm.SKIP_UI': true,
-        },
-      });
+      if (alarm.notifeeId) {
+        await notifee.cancelTriggerNotification(alarm.notifeeId).catch(() => {});
+      }
       setSetAlarms((prev) => prev.filter((a) => a.id !== alarm.id));
       showToast(
         `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} を削除しました`
@@ -413,9 +391,7 @@ export default function App() {
       {/* セット済みリスト */}
       {setAlarms.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            セット済み <Text style={styles.sectionNote}>※削除は機種依存</Text>
-          </Text>
+          <Text style={styles.sectionLabel}>セット済み</Text>
           {setAlarms.map((a) => (
             <AlarmRow
               key={a.id}

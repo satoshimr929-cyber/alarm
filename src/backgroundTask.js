@@ -1,6 +1,11 @@
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
-import * as Notifications from 'expo-notifications';
+import notifee, {
+  AndroidCategory,
+  AndroidImportance,
+  TriggerType,
+  RepeatFrequency,
+} from '@notifee/react-native';
 import {
   getAlarmsForDate,
   getTomorrow,
@@ -10,8 +15,19 @@ import {
 } from './storage';
 
 export const TASK_NAME = 'GENBA_ALARM_BACKGROUND_CHECK';
+export const CHANNEL_ID = 'genba_alarm';
 
-// アプリ起動時に必ず実行されるようモジュールスコープで定義
+export async function ensureChannel() {
+  await notifee.createChannel({
+    id: CHANNEL_ID,
+    name: 'GENBAAlarm',
+    importance: AndroidImportance.HIGH,
+    sound: 'default',
+    bypassDnd: true,
+    category: AndroidCategory.ALARM,
+  });
+}
+
 TaskManager.defineTask(TASK_NAME, async () => {
   try {
     const settings = await getSettings();
@@ -19,38 +35,31 @@ TaskManager.defineTask(TASK_NAME, async () => {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const targetMinutes = settings.autoSetHour * 60 + settings.autoSetMinute;
 
-    // 設定時刻の前後15分以内でなければスキップ
     if (Math.abs(currentMinutes - targetMinutes) > 15) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
+    await ensureChannel();
     const tomorrow = getTomorrow();
     const alarms = await getAlarmsForDate(tomorrow);
 
-    if (alarms.length > 0) {
-      const timeStr = alarms
-        .map((a) => `${String(a.hour).padStart(2, '0')}:${String(a.minute).padStart(2, '0')}`)
-        .join(', ');
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'GENBAAlarm',
-          body: `明日 ${timeStr} のアラームをセットします　タップで実行`,
-          data: { action: 'auto_set' },
-          sound: true,
-        },
-        trigger: null,
-      });
-    } else {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'GENBAAlarm',
-          body: '明日のアラームがセットされていません　タップして設定',
-          data: { action: 'no_alarm' },
-          sound: true,
-        },
-        trigger: null,
-      });
-    }
+    const body =
+      alarms.length > 0
+        ? `明日 ${alarms.map((a) => `${String(a.hour).padStart(2, '0')}:${String(a.minute).padStart(2, '0')}`).join(', ')} をセットします　タップで実行`
+        : '明日のアラームがセットされていません　タップして設定';
+
+    await notifee.displayNotification({
+      title: 'GENBAAlarm',
+      body,
+      data: { action: alarms.length > 0 ? 'auto_set' : 'no_alarm' },
+      android: {
+        channelId: CHANNEL_ID,
+        category: AndroidCategory.ALARM,
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        bypassDnd: true,
+      },
+    });
 
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch {
@@ -63,9 +72,9 @@ export async function registerBackgroundTask() {
     const registered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
     if (!registered) {
       await BackgroundFetch.registerTaskAsync(TASK_NAME, {
-        minimumInterval: 15 * 60, // 最小15分間隔
-        stopOnTerminate: false,   // アプリ終了後も継続
-        startOnBoot: true,        // 再起動後も継続
+        minimumInterval: 15 * 60,
+        stopOnTerminate: false,
+        startOnBoot: true,
       });
     }
   } catch (e) {
@@ -73,28 +82,39 @@ export async function registerBackgroundTask() {
   }
 }
 
-// 毎日指定時刻に発火するスケジュール通知を設定
-// バックグラウンドタスクが動かない場合のフォールバック
 export async function scheduleAutoNotification(hour, minute) {
-  // 既存の通知をキャンセル
+  await ensureChannel();
+
   const oldId = await getSavedNotificationId();
   if (oldId) {
-    await Notifications.cancelScheduledNotificationAsync(oldId).catch(() => {});
+    await notifee.cancelTriggerNotification(oldId).catch(() => {});
   }
 
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
+  const trigger = new Date();
+  trigger.setHours(hour, minute, 0, 0);
+  if (trigger <= new Date()) {
+    trigger.setDate(trigger.getDate() + 1);
+  }
+
+  const id = await notifee.createTriggerNotification(
+    {
       title: 'GENBAAlarm',
       body: '明日のアラームを確認する時間です　タップして設定/確認',
       data: { action: 'daily_check' },
-      sound: true,
+      android: {
+        channelId: CHANNEL_ID,
+        category: AndroidCategory.ALARM,
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        bypassDnd: true,
+      },
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-    },
-  });
+    {
+      type: TriggerType.TIMESTAMP,
+      timestamp: trigger.getTime(),
+      repeatFrequency: RepeatFrequency.DAILY,
+    }
+  );
 
   await setSavedNotificationId(id);
   return id;
@@ -103,7 +123,7 @@ export async function scheduleAutoNotification(hour, minute) {
 export async function cancelAutoNotification() {
   const id = await getSavedNotificationId();
   if (id) {
-    await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+    await notifee.cancelTriggerNotification(id).catch(() => {});
     await setSavedNotificationId(null);
   }
 }
