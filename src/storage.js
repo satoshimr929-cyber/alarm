@@ -1,0 +1,56 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SETTINGS_KEY = 'genba_settings';
+const NOTIFICATION_ID_KEY = 'genba_notification_id';
+
+export function formatDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function getTomorrow() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+export async function getAlarmsForDate(date) {
+  try {
+    const raw = await AsyncStorage.getItem(`genba_alarms_${formatDate(date)}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveAlarmsForDate(date, alarms) {
+  await AsyncStorage.setItem(`genba_alarms_${formatDate(date)}`, JSON.stringify(alarms));
+}
+
+export async function removeAlarmsForDate(date) {
+  await AsyncStorage.removeItem(`genba_alarms_${formatDate(date)}`);
+}
+
+export async function getSettings() {
+  try {
+    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : { autoSetHour: 22, autoSetMinute: 0 };
+  } catch {
+    return { autoSetHour: 22, autoSetMinute: 0 };
+  }
+}
+
+export async function saveSettings(settings) {
+  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export async function getSavedNotificationId() {
+  return AsyncStorage.getItem(NOTIFICATION_ID_KEY);
+}
+
+export async function setSavedNotificationId(id) {
+  if (id) {
+    await AsyncStorage.setItem(NOTIFICATION_ID_KEY, id);
+  } else {
+    await AsyncStorage.removeItem(NOTIFICATION_ID_KEY);
+  }
+}

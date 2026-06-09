@@ -11,7 +11,14 @@
     },
     "android": {
       "package": "com.genba.alarm",
-      "permissions": ["com.android.alarm.permission.SET_ALARM"],
+      "permissions": [
+        "com.android.alarm.permission.SET_ALARM",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#4A6CF7",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -21,6 +28,13 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#4A6CF7"
+        }
+      ]
+    ]
   }
 }

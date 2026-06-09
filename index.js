@@ -1,8 +1,6 @@
 import { registerRootComponent } from 'expo';
-
+// バックグラウンドタスクの定義はrootComponent登録前に必須
+import './src/backgroundTask';
 import App from './App';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
 registerRootComponent(App);
