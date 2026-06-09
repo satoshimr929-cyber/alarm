@@ -11,8 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as IntentLauncher from 'expo-intent-launcher';
-import notifee, { EventType } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidImportance, EventType, TriggerType } from '@notifee/react-native';
 import {
   getAlarmsForDate,
   getSettings,
@@ -25,6 +24,7 @@ import {
   registerBackgroundTask,
   scheduleAutoNotification,
   ensureChannel,
+  CHANNEL_ID,
 } from './src/backgroundTask';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -261,7 +261,7 @@ export default function App() {
     await saveAlarmsForDate(getTomorrow(), next);
   }
 
-  // 今すぐセット
+  // 今すぐセット（notifee TriggerNotification）
   async function setNow() {
     if (Platform.OS !== 'android') {
       Alert.alert('Android専用', 'この機能はAndroidのみ対応しています。');
@@ -270,27 +270,48 @@ export default function App() {
     const targets = pending.length > 0 ? pending : [{ hour, minute, id: Date.now() }];
     setSetting(true);
     try {
+      const scheduled = [];
       for (const alarm of targets) {
-        await IntentLauncher.startActivityAsync('android.intent.action.SET_ALARM', {
-          extra: {
-            'android.intent.extra.alarm.HOUR': alarm.hour,
-            'android.intent.extra.alarm.MINUTES': alarm.minute,
-            'android.intent.extra.alarm.SKIP_UI': true,
-            'android.intent.extra.alarm.MESSAGE': 'GENBAAlarm',
-            'android.intent.extra.alarm.VIBRATE': true,
+        const trigger = new Date();
+        trigger.setHours(alarm.hour, alarm.minute, 0, 0);
+        if (trigger <= new Date()) {
+          showToast(`${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} は既に過ぎています`);
+          continue;
+        }
+        const notifeeId = await notifee.createTriggerNotification(
+          {
+            title: 'GENBAAlarm',
+            body: `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')} のアラームです`,
+            android: {
+              channelId: CHANNEL_ID,
+              category: AndroidCategory.ALARM,
+              importance: AndroidImportance.HIGH,
+              sound: 'default',
+              bypassDnd: true,
+              fullScreenAction: { id: 'default' },
+              pressAction: { id: 'default', launchActivity: 'default' },
+            },
           },
-        });
+          {
+            type: TriggerType.TIMESTAMP,
+            timestamp: trigger.getTime(),
+            alarmManager: { allowWhileIdle: true },
+          }
+        );
+        scheduled.push({ ...alarm, notifeeId });
       }
-      const label =
-        targets.length === 1
-          ? `${String(targets[0].hour).padStart(2, '0')}:${String(targets[0].minute).padStart(2, '0')} をセットしました`
-          : `${targets.length}件をセットしました`;
-      showToast(label);
-      const next = [...setAlarms, ...targets].sort(
-        (a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
-      );
-      setSetAlarms(next);
-      setPending([]);
+      if (scheduled.length > 0) {
+        const label =
+          scheduled.length === 1
+            ? `${String(scheduled[0].hour).padStart(2, '0')}:${String(scheduled[0].minute).padStart(2, '0')} をセットしました`
+            : `${scheduled.length}件をセットしました`;
+        showToast(label);
+        const next = [...setAlarms, ...scheduled].sort(
+          (a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
+        );
+        setSetAlarms(next);
+        setPending([]);
+      }
     } catch (e) {
       Alert.alert('エラー', e.message);
     } finally {

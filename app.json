@@ -19,7 +19,8 @@
         "VIBRATE",
         "WAKE_LOCK",
         "ACCESS_NOTIFICATION_POLICY",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "USE_FULL_SCREEN_INTENT"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#4A6CF7",
