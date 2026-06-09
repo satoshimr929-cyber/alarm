@@ -11,6 +11,7 @@
     },
     "android": {
       "package": "com.genba.alarm",
+      "permissions": ["com.android.alarm.permission.SET_ALARM"],
       "adaptiveIcon": {
         "backgroundColor": "#4A6CF7",
         "foregroundImage": "./assets/android-icon-foreground.png",
