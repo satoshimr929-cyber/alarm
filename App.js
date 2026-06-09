@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import notifee, { AndroidCategory, AndroidImportance, EventType, TriggerType, RepeatFrequency } from '@notifee/react-native';
+import notifee from '@notifee/react-native';
 import {
   setAlarm,
   cancelAlarm,
@@ -30,10 +30,8 @@ import {
   saveSettings,
   getTomorrow,
   formatDate,
-  getSavedNotificationId,
-  setSavedNotificationId,
 } from './src/storage';
-import { registerBackgroundTask, ensureChannel, CHANNEL_ID } from './src/backgroundTask';
+import { registerBackgroundTask, ensureChannel } from './src/backgroundTask';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
@@ -85,16 +83,18 @@ function AlarmRow({ alarm, onDelete, badge, badgeColor }) {
   );
 }
 
-function SettingsModal({ visible, autoSetHour, autoSetMinute, onSave, onClose }) {
-  const [h, setH] = useState(autoSetHour);
-  const [m, setM] = useState(autoSetMinute);
-  useEffect(() => { setH(autoSetHour); setM(autoSetMinute); }, [autoSetHour, autoSetMinute]);
+function SettingsModal({ visible, notifyHour, notifyMinute, onSave, onClose }) {
+  const [h, setH] = useState(notifyHour);
+  const [m, setM] = useState(notifyMinute);
+  useEffect(() => { setH(notifyHour); setM(notifyMinute); }, [notifyHour, notifyMinute]);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>⚙ 自動セット設定</Text>
-          <Text style={styles.modalSubtitle}>毎日この時刻に通知を送ります</Text>
+          <Text style={styles.modalTitle}>⚙ 促し通知の設定</Text>
+          <Text style={styles.modalSubtitle}>
+            翌日のアラームが未登録の場合、この時刻に通知を送ります
+          </Text>
           <View style={styles.pickerRow}>
             <DrumRoll items={HOURS} selected={h} onSelect={setH} label="時" visibleItems={3} />
             <Text style={styles.colon}>:</Text>
@@ -119,18 +119,16 @@ export default function App() {
   const [pending, setPending] = useState([]);
   const [setAlarms, setSetAlarms] = useState([]);
   const [tomorrowAlarms, setTomorrowAlarms] = useState([]);
-  const [autoSetHour, setAutoSetHour] = useState(22);
-  const [autoSetMinute, setAutoSetMinute] = useState(0);
+  const [notifyHour, setNotifyHour] = useState(22);
+  const [notifyMinute, setNotifyMinute] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [setting, setSetting] = useState(false);
 
   useEffect(() => {
     (async () => {
-      // 通知権限
       await notifee.requestPermission();
       await ensureChannel();
 
-      // 正確なアラーム権限チェック（Android 12+）
       const canExact = await canScheduleExactAlarms();
       if (!canExact) {
         Alert.alert(
@@ -140,7 +138,6 @@ export default function App() {
         );
       }
 
-      // フルスクリーン表示権限チェック（Android 14+）
       const canFullScreen = await canUseFullScreenIntent();
       if (!canFullScreen) {
         Alert.alert(
@@ -150,64 +147,16 @@ export default function App() {
         );
       }
 
-      // 設定ロード
       const s = await getSettings();
-      setAutoSetHour(s.autoSetHour);
-      setAutoSetMinute(s.autoSetMinute);
+      setNotifyHour(s.notifyHour);
+      setNotifyMinute(s.notifyMinute);
 
-      // バックグラウンドタスク登録
       await registerBackgroundTask();
 
-      // 毎日定時通知をスケジュール
-      await scheduleAutoNotification(s.autoSetHour, s.autoSetMinute);
-
-      // 明日分をロード
       const saved = await getAlarmsForDate(getTomorrow());
       setTomorrowAlarms(saved);
     })();
-
-    const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
-      if (type === EventType.PRESS) {
-        const action = detail.notification?.data?.action;
-        if (action === 'auto_set' || action === 'daily_check') handleAutoSetFromNotification();
-      }
-    });
-    return unsubscribe;
   }, []);
-
-  async function scheduleAutoNotification(h, m) {
-    const oldId = await getSavedNotificationId();
-    if (oldId) await notifee.cancelTriggerNotification(oldId).catch(() => {});
-
-    const trigger = new Date();
-    trigger.setHours(h, m, 0, 0);
-    if (trigger <= new Date()) trigger.setDate(trigger.getDate() + 1);
-
-    const id = await notifee.createTriggerNotification(
-      {
-        title: 'GENBAAlarm',
-        body: '明日のアラームを確認する時間です　タップして設定/確認',
-        data: { action: 'daily_check' },
-        android: { channelId: CHANNEL_ID, category: AndroidCategory.ALARM, importance: AndroidImportance.HIGH, sound: 'default', bypassDnd: true },
-      },
-      { type: TriggerType.TIMESTAMP, timestamp: trigger.getTime(), repeatFrequency: RepeatFrequency.DAILY }
-    );
-    await setSavedNotificationId(id);
-  }
-
-  async function handleAutoSetFromNotification() {
-    const alarms = await getAlarmsForDate(getTomorrow());
-    if (alarms.length === 0) { showToast('明日のアラームが登録されていません'); return; }
-    try {
-      for (const alarm of alarms) {
-        const ts = makeTimestamp(alarm.hour, alarm.minute);
-        await setAlarm(alarm.id || makeAlarmId(), ts, makeLabel(alarm.hour, alarm.minute));
-      }
-      showToast(`${alarms.length}件のアラームを自動セットしました`);
-    } catch (e) {
-      Alert.alert('自動セットエラー', e.message);
-    }
-  }
 
   function addToPending() {
     const dup = pending.some((a) => a.hour === hour && a.minute === minute) ||
@@ -280,11 +229,11 @@ export default function App() {
   }
 
   async function handleSaveSettings(h, m) {
-    setAutoSetHour(h); setAutoSetMinute(m);
-    await saveSettings({ autoSetHour: h, autoSetMinute: m });
-    await scheduleAutoNotification(h, m);
+    setNotifyHour(h);
+    setNotifyMinute(m);
+    await saveSettings({ notifyHour: h, notifyMinute: m });
     setSettingsVisible(false);
-    showToast(`自動チェック時刻を ${makeLabel(h, m)} に設定しました`);
+    showToast(`促し通知を ${makeLabel(h, m)} に設定しました`);
   }
 
   const tomorrowDate = formatDate(getTomorrow());
@@ -353,9 +302,8 @@ export default function App() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabel}>
-            📅 明日の自動セット予定 <Text style={styles.sectionNote}>{tomorrowDate}</Text>
+            📅 明日の登録済みアラーム <Text style={styles.sectionNote}>{tomorrowDate}</Text>
           </Text>
-          <Text style={styles.autoSetInfo}>{makeLabel(autoSetHour, autoSetMinute)}</Text>
         </View>
         {tomorrowAlarms.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -364,18 +312,18 @@ export default function App() {
           </View>
         ) : (
           tomorrowAlarms.map((a) => (
-            <AlarmRow key={a.id} alarm={a} badge="自動" badgeColor="#FF9F0A" onDelete={() => removeTomorrow(a.id)} />
+            <AlarmRow key={a.id} alarm={a} badge="明日" badgeColor="#FF9F0A" onDelete={() => removeTomorrow(a.id)} />
           ))
         )}
         <Text style={styles.autoSetDescription}>
-          毎日 {makeLabel(autoSetHour, autoSetMinute)} に通知が届きます。タップでアラーム自動セット。
+          毎日 {makeLabel(notifyHour, notifyMinute)} に未登録の場合のみ通知が届きます
         </Text>
       </View>
 
       <SettingsModal
         visible={settingsVisible}
-        autoSetHour={autoSetHour}
-        autoSetMinute={autoSetMinute}
+        notifyHour={notifyHour}
+        notifyMinute={notifyMinute}
         onSave={handleSaveSettings}
         onClose={() => setSettingsVisible(false)}
       />
@@ -410,7 +358,6 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
   sectionNote: { fontSize: 10, fontWeight: '400', color: '#BBB' },
-  autoSetInfo: { fontSize: 12, color: '#4A6CF7', fontWeight: '600' },
   alarmRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: '#D0D8FF', gap: 10 },
   badge: { fontSize: 10, color: '#FFF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontWeight: '700', overflow: 'hidden' },
   alarmRowTime: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#1A1A2E', letterSpacing: 2 },
@@ -427,7 +374,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, paddingBottom: 40, alignItems: 'center' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1A1A2E', marginBottom: 6 },
-  modalSubtitle: { fontSize: 13, color: '#888', marginBottom: 24 },
+  modalSubtitle: { fontSize: 13, color: '#888', marginBottom: 24, textAlign: 'center' },
   saveButton: { width: '100%', backgroundColor: '#4A6CF7', paddingVertical: 14, borderRadius: 28, alignItems: 'center', marginBottom: 12 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   cancelLink: { padding: 8 },

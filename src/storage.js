@@ -33,9 +33,13 @@ export async function removeAlarmsForDate(date) {
 export async function getSettings() {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    return raw ? JSON.parse(raw) : { autoSetHour: 22, autoSetMinute: 0 };
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      notifyHour: parsed.notifyHour ?? parsed.autoSetHour ?? 22,
+      notifyMinute: parsed.notifyMinute ?? parsed.autoSetMinute ?? 0,
+    };
   } catch {
-    return { autoSetHour: 22, autoSetMinute: 0 };
+    return { notifyHour: 22, notifyMinute: 0 };
   }
 }
 
