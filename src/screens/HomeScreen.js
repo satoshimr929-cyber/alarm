@@ -297,7 +297,7 @@ export default function HomeScreen() {
         style={setting && styles.primaryButtonDisabled}
       >
         <LinearGradient
-          colors={['#2979FF', '#00B4FF']}
+          colors={['#1A56E8', '#00C6FF', '#00E5D0']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.primaryButton}
