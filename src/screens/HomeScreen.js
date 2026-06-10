@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import notifee from '@notifee/react-native';
 import {
@@ -290,12 +291,19 @@ export default function HomeScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.primaryButton, setting && styles.primaryButtonDisabled]}
         onPress={handleSet}
         disabled={setting}
         activeOpacity={0.8}
+        style={setting && styles.primaryButtonDisabled}
       >
-        <Text style={styles.primaryButtonText}>{setting ? 'セット中...' : '⏰ アラームをセット'}</Text>
+        <LinearGradient
+          colors={['#2979FF', '#00B4FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.primaryButton}
+        >
+          <Text style={styles.primaryButtonText}>{setting ? 'セット中...' : '⏰ アラームをセット'}</Text>
+        </LinearGradient>
       </TouchableOpacity>
 
       {/* 選択日の登録済みアラーム */}
@@ -373,15 +381,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   container: { padding: 20, paddingBottom: 48 },
-  fieldLabel: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8, marginTop: 18, letterSpacing: 0.5 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: '#8A8A8A', marginBottom: 6, marginTop: 18, letterSpacing: 0.8, textTransform: 'uppercase' },
   selectBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 18, paddingVertical: 18 },
-  selectBoxText: { flex: 1, fontSize: 20, color: colors.text, fontWeight: '700' },
-  selectBoxPlaceholder: { color: colors.textMuted, fontWeight: '400', fontSize: 16 },
-  selectBoxArrow: { fontSize: 12, color: colors.textSecondary },
+  selectBoxText: { flex: 1, fontSize: 20, color: '#FFFFFF', fontWeight: '700' },
+  selectBoxPlaceholder: { color: '#8A8A8A', fontWeight: '400', fontSize: 16 },
+  selectBoxArrow: { fontSize: 12, color: '#8A8A8A' },
   timeDisplay: { alignSelf: 'center', alignItems: 'center', paddingVertical: 16, marginBottom: 20 },
   timeText: { fontSize: 88, fontWeight: 'bold', color: colors.accent, letterSpacing: 4, lineHeight: 100 },
   timeHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  primaryButton: { backgroundColor: colors.accentDark, paddingVertical: 16, borderRadius: 32, alignItems: 'center', marginBottom: 24 },
+  primaryButton: { paddingVertical: 16, borderRadius: 32, alignItems: 'center', marginBottom: 24 },
   primaryButtonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: 'bold' },
   section: { marginBottom: 16 },

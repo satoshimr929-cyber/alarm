@@ -9,6 +9,7 @@
     "@react-navigation/native": "^7.3.0",
     "expo": "~56.0.9",
     "expo-background-fetch": "~13.0.5",
+    "expo-linear-gradient": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "expo-task-manager": "~12.0.5",
     "react": "19.2.3",
