@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   ToastAndroid,
@@ -13,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getSites, saveSites } from '../alarmData';
-import { getSettings, saveSettings } from '../storage';
+import { getSettings, saveSettings, defaultExtraAlarms } from '../storage';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -136,6 +137,7 @@ export default function SettingsScreen() {
   const [sites, setSites] = useState([]);
   const [notifyHour, setNotifyHour] = useState(22);
   const [notifyMinute, setNotifyMinute] = useState(0);
+  const [extraAlarms, setExtraAlarms] = useState(defaultExtraAlarms());
   const [siteModal, setSiteModal] = useState({ visible: false, site: null });
   const [notifyModalVisible, setNotifyModalVisible] = useState(false);
 
@@ -146,6 +148,7 @@ export default function SettingsScreen() {
         const s = await getSettings();
         setNotifyHour(s.notifyHour);
         setNotifyMinute(s.notifyMinute);
+        setExtraAlarms(s.extraAlarms);
       })();
     }, [])
   );
@@ -180,8 +183,18 @@ export default function SettingsScreen() {
     ]);
   }
 
+  async function handleToggleExtra(offset) {
+    const next = extraAlarms.map((e) =>
+      e.offset === offset ? { ...e, enabled: !e.enabled } : e
+    );
+    setExtraAlarms(next);
+    const s = await getSettings();
+    await saveSettings({ ...s, extraAlarms: next });
+  }
+
   async function handleSaveNotify(h, m) {
-    await saveSettings({ notifyHour: h, notifyMinute: m });
+    const s = await getSettings();
+    await saveSettings({ ...s, notifyHour: h, notifyMinute: m });
     setNotifyHour(h);
     setNotifyMinute(m);
     setNotifyModalVisible(false);
@@ -221,6 +234,34 @@ export default function SettingsScreen() {
           </View>
         ))
       )}
+
+      {/* 追加アラーム */}
+      <Text style={[styles.sectionLabel, { marginTop: 32 }]}>追加アラーム</Text>
+      <Text style={styles.extraHint}>起床時刻の前後に自動でアラームを追加します</Text>
+      {[
+        { label: '起床前', offsets: [-5, -10, -15, -20, -25, -30] },
+        { label: '起床後', offsets: [5, 10, 15, 20, 25, 30] },
+      ].map(({ label, offsets }) => (
+        <View key={label} style={styles.extraGroup}>
+          <Text style={styles.extraGroupLabel}>{label}</Text>
+          {offsets.map((offset) => {
+            const entry = extraAlarms.find((e) => e.offset === offset);
+            const enabled = entry?.enabled ?? false;
+            const absMin = Math.abs(offset);
+            return (
+              <View key={offset} style={styles.extraRow}>
+                <Text style={styles.extraRowText}>{absMin}分</Text>
+                <Switch
+                  value={enabled}
+                  onValueChange={() => handleToggleExtra(offset)}
+                  thumbColor={enabled ? colors.accent : colors.textMuted}
+                  trackColor={{ false: colors.border, true: colors.accentDark }}
+                />
+              </View>
+            );
+          })}
+        </View>
+      ))}
 
       {/* 促し通知 */}
       <Text style={[styles.sectionLabel, { marginTop: 32 }]}>促し通知</Text>
@@ -290,4 +331,9 @@ const styles = StyleSheet.create({
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   cancelLink: { alignItems: 'center', padding: 8 },
   cancelLinkText: { color: colors.textSecondary, fontSize: 14 },
+  extraHint: { fontSize: 11, color: colors.textMuted, marginBottom: 10 },
+  extraGroup: { backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, marginBottom: 10 },
+  extraGroupLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  extraRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  extraRowText: { fontSize: 15, color: colors.text },
 });

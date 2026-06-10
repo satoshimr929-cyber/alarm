@@ -30,6 +30,12 @@ export async function removeAlarmsForDate(date) {
   await AsyncStorage.removeItem(`genba_alarms_${formatDate(date)}`);
 }
 
+const EXTRA_OFFSETS = [-30, -25, -20, -15, -10, -5, 5, 10, 15, 20, 25, 30];
+
+export function defaultExtraAlarms() {
+  return EXTRA_OFFSETS.map((offset) => ({ offset, enabled: false }));
+}
+
 export async function getSettings() {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
@@ -37,9 +43,10 @@ export async function getSettings() {
     return {
       notifyHour: parsed.notifyHour ?? parsed.autoSetHour ?? 22,
       notifyMinute: parsed.notifyMinute ?? parsed.autoSetMinute ?? 0,
+      extraAlarms: parsed.extraAlarms ?? defaultExtraAlarms(),
     };
   } catch {
-    return { notifyHour: 22, notifyMinute: 0 };
+    return { notifyHour: 22, notifyMinute: 0, extraAlarms: defaultExtraAlarms() };
   }
 }
 

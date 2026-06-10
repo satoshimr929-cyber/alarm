@@ -84,9 +84,21 @@ export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }
     throw new Error('過去の日時はセットできません');
   }
 
+  const prefix = siteName ? `${siteName} ` : '';
   const nativeId = makeAlarmId();
-  const label = `${siteName ? siteName + ' ' : ''}${wakeTime}`;
-  await nativeSetAlarm(nativeId, ts, label);
+  await nativeSetAlarm(nativeId, ts, `${prefix}${wakeTime}`);
+
+  const alarmIds = [nativeId];
+  const enabledExtras = extraAlarms.filter((e) => e.enabled);
+  for (const extra of enabledExtras) {
+    const extraTs = ts + extra.offset * 60 * 1000;
+    if (extraTs > Date.now()) {
+      const extraId = makeAlarmId();
+      const sign = extra.offset < 0 ? `${Math.abs(extra.offset)}分前` : `${extra.offset}分後`;
+      await nativeSetAlarm(extraId, extraTs, `${prefix}${wakeTime}（${sign}）`);
+      alarmIds.push(extraId);
+    }
+  }
 
   const entry = {
     id: `${date.replace(/-/g, '')}_${wakeTime.replace(':', '')}`,
@@ -94,7 +106,7 @@ export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }
     siteName,
     wakeTime,
     extraAlarms,
-    alarmIds: [nativeId],
+    alarmIds,
   };
 
   const next = alarms.filter((a) => a.date !== date).concat(entry)

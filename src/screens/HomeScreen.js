@@ -27,6 +27,7 @@ import {
   formatDateKey,
   parseTime,
 } from '../alarmData';
+import { getSettings } from '../storage';
 import { registerBackgroundTask, ensureChannel } from '../backgroundTask';
 import { colors } from '../theme';
 
@@ -166,10 +167,12 @@ export default function HomeScreen() {
       const dateStr = formatDateKey(date);
       const wakeTime = `${pad(hour)}:${pad(minute)}`;
       const overwritten = alarms.some((a) => a.date === dateStr);
+      const settings = await getSettings();
       await upsertAlarm({
         date: dateStr,
         siteName: selectedSite?.name || '',
         wakeTime,
+        extraAlarms: settings.extraAlarms,
       });
       setAlarms(await getAlarms());
       showToast(overwritten ? `${dateLabel(date)} ${wakeTime} に上書きしました` : `${dateLabel(date)} ${wakeTime} をセットしました`);
