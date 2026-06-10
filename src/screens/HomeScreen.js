@@ -203,19 +203,19 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      {/* 日付選択 */}
+      <Text style={styles.fieldLabel}>日付</Text>
+      <TouchableOpacity style={styles.selectBox} onPress={() => setDateModalVisible(true)}>
+        <Text style={styles.selectBoxText}>{dateLabel(date)}</Text>
+        <Text style={styles.selectBoxArrow}>▼</Text>
+      </TouchableOpacity>
+
       {/* 現場選択 */}
       <Text style={styles.fieldLabel}>現場</Text>
       <TouchableOpacity style={styles.selectBox} onPress={() => setSiteModalVisible(true)}>
         <Text style={[styles.selectBoxText, !selectedSite && styles.selectBoxPlaceholder]}>
           {selectedSite ? selectedSite.name : '現場を選択（任意）'}
         </Text>
-        <Text style={styles.selectBoxArrow}>▼</Text>
-      </TouchableOpacity>
-
-      {/* 日付選択 */}
-      <Text style={styles.fieldLabel}>日付</Text>
-      <TouchableOpacity style={styles.selectBox} onPress={() => setDateModalVisible(true)}>
-        <Text style={styles.selectBoxText}>{dateLabel(date)}</Text>
         <Text style={styles.selectBoxArrow}>▼</Text>
       </TouchableOpacity>
 
@@ -239,24 +239,26 @@ export default function HomeScreen() {
         <Text style={styles.primaryButtonText}>{setting ? 'セット中...' : '⏰ アラームをセット'}</Text>
       </TouchableOpacity>
 
-      {/* 登録済み */}
-      {alarms.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>登録済みアラーム</Text>
-          {alarms.map((a) => (
-            <View key={a.id} style={styles.alarmRow}>
+      {/* 選択日の登録済みアラーム */}
+      {(() => {
+        const dateStr = formatDateKey(date);
+        const dayAlarm = alarms.find((a) => a.date === dateStr);
+        if (!dayAlarm) return null;
+        return (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>この日のアラーム</Text>
+            <View style={styles.alarmRow}>
               <View style={styles.alarmRowMain}>
-                <Text style={styles.alarmRowDate}>{a.date}</Text>
-                <Text style={styles.alarmRowTime}>{a.wakeTime}</Text>
-                {!!a.siteName && <Text style={styles.alarmRowSite}>{a.siteName}</Text>}
+                <Text style={styles.alarmRowTime}>{dayAlarm.wakeTime}</Text>
+                {!!dayAlarm.siteName && <Text style={styles.alarmRowSite}>{dayAlarm.siteName}</Text>}
               </View>
-              <TouchableOpacity onPress={() => handleDelete(a)} style={styles.rowDeleteBtn}>
+              <TouchableOpacity onPress={() => handleDelete(dayAlarm)} style={styles.rowDeleteBtn}>
                 <Text style={styles.rowDeleteBtnText}>🗑</Text>
               </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      )}
+          </View>
+        );
+      })()}
 
       {/* 現場選択モーダル */}
       <PickerModal visible={siteModalVisible} title="現場を選択" onClose={() => setSiteModalVisible(false)}>
@@ -303,11 +305,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   container: { padding: 20, paddingBottom: 48 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, marginBottom: 6, marginTop: 14, letterSpacing: 0.5 },
-  selectBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 14 },
-  selectBoxText: { flex: 1, fontSize: 16, color: colors.text, fontWeight: '600' },
-  selectBoxPlaceholder: { color: colors.textMuted, fontWeight: '400' },
-  selectBoxArrow: { fontSize: 10, color: colors.textSecondary },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8, marginTop: 18, letterSpacing: 0.5 },
+  selectBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 18, paddingVertical: 18 },
+  selectBoxText: { flex: 1, fontSize: 20, color: colors.text, fontWeight: '700' },
+  selectBoxPlaceholder: { color: colors.textMuted, fontWeight: '400', fontSize: 16 },
+  selectBoxArrow: { fontSize: 12, color: colors.textSecondary },
   timeDisplay: { alignSelf: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 32, paddingVertical: 10, marginBottom: 14 },
   timeText: { fontSize: 44, fontWeight: 'bold', color: colors.accent, letterSpacing: 3 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
