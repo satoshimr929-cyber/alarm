@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import notifee from '@notifee/react-native';
@@ -262,125 +263,133 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-      {/* 日付選択 */}
-      <Text style={styles.fieldLabel}>日付</Text>
-      <TouchableOpacity style={styles.selectBox} onPress={() => setDateModalVisible(true)}>
-        <Text style={styles.selectBoxText}>{dateLabel(date)}</Text>
-        <Text style={styles.selectBoxArrow}>▼</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+        {/* 日付選択 */}
+        <Text style={styles.fieldLabel}>日付</Text>
+        <TouchableOpacity style={styles.selectBox} onPress={() => setDateModalVisible(true)}>
+          <Text style={styles.selectBoxText}>{dateLabel(date)}</Text>
+          <Text style={styles.selectBoxArrow}>▼</Text>
+        </TouchableOpacity>
 
-      {/* 現場選択 */}
-      <Text style={styles.fieldLabel}>現場</Text>
-      <TouchableOpacity style={styles.selectBox} onPress={() => setSiteModalVisible(true)}>
-        <Text style={[styles.selectBoxText, !selectedSite && styles.selectBoxPlaceholder]}>
-          {selectedSite ? selectedSite.name : '現場を選択（任意）'}
-        </Text>
-        <Text style={styles.selectBoxArrow}>▼</Text>
-      </TouchableOpacity>
+        {/* 現場選択 */}
+        <Text style={styles.fieldLabel}>現場</Text>
+        <TouchableOpacity style={styles.selectBox} onPress={() => setSiteModalVisible(true)}>
+          <Text style={[styles.selectBoxText, !selectedSite && styles.selectBoxPlaceholder]}>
+            {selectedSite ? selectedSite.name : '現場を選択（任意）'}
+          </Text>
+          <Text style={styles.selectBoxArrow}>▼</Text>
+        </TouchableOpacity>
 
-      {/* 時刻（タップでボトムシート） */}
-      <Text style={styles.fieldLabel}>起床時刻</Text>
-      <TouchableOpacity
-        style={styles.timeDisplay}
-        onPress={() => setTimeSheetVisible(true)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.timeText}>{pad(hour)}:{pad(minute)}</Text>
-        <Text style={styles.timeHint}>タップして変更</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={handleSet}
-        disabled={setting}
-        activeOpacity={0.8}
-        style={setting && styles.primaryButtonDisabled}
-      >
-        <LinearGradient
-          colors={['#1A56E8', '#00C6FF', '#00E5D0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.primaryButton}
+        {/* 時刻（タップでボトムシート） */}
+        <Text style={styles.fieldLabel}>起床時刻</Text>
+        <TouchableOpacity
+          style={styles.timeDisplay}
+          onPress={() => setTimeSheetVisible(true)}
+          activeOpacity={0.7}
         >
-          <Text style={styles.primaryButtonText}>{setting ? 'セット中...' : '⏰ アラームをセット'}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+          <Text style={styles.timeText}>{pad(hour)}:{pad(minute)}</Text>
+          <Text style={styles.timeHint}>タップして変更</Text>
+        </TouchableOpacity>
 
-      {/* 選択日の登録済みアラーム */}
-      {(() => {
-        const dateStr = formatDateKey(date);
-        const dayAlarm = alarms.find((a) => a.date === dateStr);
-        if (!dayAlarm) return null;
-        return (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>この日のアラーム</Text>
-            <View style={styles.alarmRow}>
-              <View style={styles.alarmRowMain}>
-                <Text style={styles.alarmRowTime}>{dayAlarm.wakeTime}</Text>
-                {!!dayAlarm.siteName && <Text style={styles.alarmRowSite}>{dayAlarm.siteName}</Text>}
+        {/* 選択日の登録済みアラーム */}
+        {(() => {
+          const dateStr = formatDateKey(date);
+          const dayAlarm = alarms.find((a) => a.date === dateStr);
+          if (!dayAlarm) return null;
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>この日のアラーム</Text>
+              <View style={styles.alarmRow}>
+                <View style={styles.alarmRowMain}>
+                  <Text style={styles.alarmRowTime}>{dayAlarm.wakeTime}</Text>
+                  {!!dayAlarm.siteName && <Text style={styles.alarmRowSite}>{dayAlarm.siteName}</Text>}
+                </View>
+                <TouchableOpacity onPress={() => handleDelete(dayAlarm)} style={styles.rowDeleteBtn}>
+                  <Text style={styles.rowDeleteBtnText}>🗑</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => handleDelete(dayAlarm)} style={styles.rowDeleteBtn}>
-                <Text style={styles.rowDeleteBtnText}>🗑</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        );
-      })()}
+          );
+        })()}
 
-      {/* 現場選択モーダル */}
-      <PickerModal visible={siteModalVisible} title="現場を選択" onClose={() => setSiteModalVisible(false)}>
-        {sites.length === 0 ? (
-          <Text style={styles.modalEmpty}>現場が未登録です{'\n'}⚙️設定タブから登録できます</Text>
-        ) : (
-          sites.map((s) => (
-            <TouchableOpacity key={s.id} style={styles.modalItem} onPress={() => selectSite(s)}>
-              <Text style={styles.modalItemText}>{s.name}</Text>
-              <Text style={styles.modalItemSub}>{s.defaultWakeTime}</Text>
-            </TouchableOpacity>
-          ))
-        )}
-        {selectedSite && (
-          <TouchableOpacity style={styles.modalItem} onPress={() => selectSite(null)}>
-            <Text style={[styles.modalItemText, { color: colors.textSecondary }]}>選択を解除</Text>
-          </TouchableOpacity>
-        )}
-      </PickerModal>
-
-      {/* 日付選択モーダル */}
-      <PickerModal visible={dateModalVisible} title="日付を選択" onClose={() => setDateModalVisible(false)}>
-        <ScrollView style={{ maxHeight: 360 }}>
-          {nextDays(14).map((d) => {
-            const isSelected = formatDateKey(d) === formatDateKey(date);
-            return (
-              <TouchableOpacity
-                key={formatDateKey(d)}
-                style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                onPress={() => { setDate(d); setDateModalVisible(false); }}
-              >
-                <Text style={[styles.modalItemText, isSelected && { color: colors.accent }]}>
-                  {dateLabel(d)}
-                </Text>
+        {/* 現場選択モーダル */}
+        <PickerModal visible={siteModalVisible} title="現場を選択" onClose={() => setSiteModalVisible(false)}>
+          {sites.length === 0 ? (
+            <Text style={styles.modalEmpty}>現場が未登録です{'\n'}⚙️設定タブから登録できます</Text>
+          ) : (
+            sites.map((s) => (
+              <TouchableOpacity key={s.id} style={styles.modalItem} onPress={() => selectSite(s)}>
+                <Text style={styles.modalItemText}>{s.name}</Text>
+                <Text style={styles.modalItemSub}>{s.defaultWakeTime}</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </PickerModal>
+            ))
+          )}
+          {selectedSite && (
+            <TouchableOpacity style={styles.modalItem} onPress={() => selectSite(null)}>
+              <Text style={[styles.modalItemText, { color: colors.textSecondary }]}>選択を解除</Text>
+            </TouchableOpacity>
+          )}
+        </PickerModal>
 
-      {/* 時刻選択ボトムシート */}
-      <TimeBottomSheet
-        visible={timeSheetVisible}
-        hour={hour}
-        minute={minute}
-        onConfirm={(h, m) => { setHour(h); setMinute(m); setTimeSheetVisible(false); }}
-        onClose={() => setTimeSheetVisible(false)}
-      />
-    </ScrollView>
+        {/* 日付選択モーダル */}
+        <PickerModal visible={dateModalVisible} title="日付を選択" onClose={() => setDateModalVisible(false)}>
+          <ScrollView style={{ maxHeight: 360 }}>
+            {nextDays(14).map((d) => {
+              const isSelected = formatDateKey(d) === formatDateKey(date);
+              return (
+                <TouchableOpacity
+                  key={formatDateKey(d)}
+                  style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                  onPress={() => { setDate(d); setDateModalVisible(false); }}
+                >
+                  <Text style={[styles.modalItemText, isSelected && { color: colors.accent }]}>
+                    {dateLabel(d)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </PickerModal>
+
+        {/* 時刻選択ボトムシート */}
+        <TimeBottomSheet
+          visible={timeSheetVisible}
+          hour={hour}
+          minute={minute}
+          onConfirm={(h, m) => { setHour(h); setMinute(m); setTimeSheetVisible(false); }}
+          onClose={() => setTimeSheetVisible(false)}
+        />
+      </ScrollView>
+
+      {/* セットボタン（画面下部に固定） */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          onPress={handleSet}
+          disabled={setting}
+          activeOpacity={0.8}
+          style={[styles.primaryButtonWrapper, setting && styles.primaryButtonDisabled]}
+        >
+          <LinearGradient
+            colors={['#1A56E8', '#00C6FF', '#00E5D0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.primaryButtonText}>{setting ? 'セット中...' : '⏰ アラームをセット'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
   screen: { flex: 1, backgroundColor: colors.background },
-  container: { padding: 20, paddingBottom: 48 },
+  container: { padding: 20, paddingBottom: 16 },
+  bottomBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  primaryButtonWrapper: {},
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#8A8A8A', marginBottom: 6, marginTop: 18, letterSpacing: 0.8, textTransform: 'uppercase' },
   selectBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 18, paddingVertical: 18 },
   selectBoxText: { flex: 1, fontSize: 20, color: '#FFFFFF', fontWeight: '700' },
@@ -389,7 +398,7 @@ const styles = StyleSheet.create({
   timeDisplay: { alignSelf: 'center', alignItems: 'center', paddingVertical: 16, marginBottom: 20 },
   timeText: { fontSize: 88, fontWeight: 'bold', color: colors.accent, letterSpacing: 4, lineHeight: 100 },
   timeHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  primaryButton: { paddingVertical: 16, borderRadius: 32, alignItems: 'center', marginBottom: 24 },
+  primaryButton: { paddingVertical: 16, borderRadius: 32, alignItems: 'center' },
   primaryButtonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: 'bold' },
   section: { marginBottom: 16 },
