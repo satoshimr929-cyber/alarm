@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Modal,
   Platform,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   Text,
   ToastAndroid,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,6 +36,7 @@ import { colors } from '../theme';
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+const SHEET_HEIGHT = 320;
 
 function showToast(msg) {
   if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
@@ -64,7 +67,7 @@ function dateLabel(d) {
   return base;
 }
 
-function DrumRoll({ items, selected, onSelect, label, itemHeight = 44, visibleItems = 3 }) {
+function DrumRoll({ items, selected, onSelect, label, itemHeight = 48, visibleItems = 3 }) {
   return (
     <View style={styles.drumRollContainer}>
       <Text style={styles.drumRollLabel}>{label}</Text>
@@ -104,6 +107,61 @@ function PickerModal({ visible, title, children, onClose }) {
   );
 }
 
+function TimeBottomSheet({ visible, hour, minute, onConfirm, onClose }) {
+  const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const [draftHour, setDraftHour] = useState(hour);
+  const [draftMinute, setDraftMinute] = useState(minute);
+
+  // draft を親の値に同期（シート開くたびに現在値を反映）
+  const prevVisible = useRef(false);
+  if (visible && !prevVisible.current) {
+    setDraftHour(hour);
+    setDraftMinute(minute);
+  }
+  prevVisible.current = visible;
+
+  if (visible) {
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+      speed: 20,
+    }).start();
+  } else {
+    Animated.timing(slideAnim, {
+      toValue: SHEET_HEIGHT,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.sheetOverlay} />
+      </TouchableWithoutFeedback>
+      <Animated.View
+        style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}
+      >
+        <View style={styles.sheetHandle} />
+        <Text style={styles.sheetTitle}>起床時刻を選択</Text>
+        <View style={styles.sheetPickerRow}>
+          <DrumRoll items={HOURS} selected={draftHour} onSelect={setDraftHour} label="時" />
+          <Text style={styles.sheetColon}>:</Text>
+          <DrumRoll items={MINUTES} selected={draftMinute} onSelect={setDraftMinute} label="分" />
+        </View>
+        <TouchableOpacity
+          style={styles.sheetConfirmBtn}
+          onPress={() => onConfirm(draftHour, draftMinute)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sheetConfirmText}>確定</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 export default function HomeScreen() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -116,6 +174,7 @@ export default function HomeScreen() {
   const [alarms, setAlarms] = useState([]);
   const [siteModalVisible, setSiteModalVisible] = useState(false);
   const [dateModalVisible, setDateModalVisible] = useState(false);
+  const [timeSheetVisible, setTimeSheetVisible] = useState(false);
   const [setting, setSetting] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -219,16 +278,16 @@ export default function HomeScreen() {
         <Text style={styles.selectBoxArrow}>▼</Text>
       </TouchableOpacity>
 
-      {/* 時刻 */}
+      {/* 時刻（タップでボトムシート） */}
       <Text style={styles.fieldLabel}>起床時刻</Text>
-      <View style={styles.timeDisplay}>
+      <TouchableOpacity
+        style={styles.timeDisplay}
+        onPress={() => setTimeSheetVisible(true)}
+        activeOpacity={0.7}
+      >
         <Text style={styles.timeText}>{pad(hour)}:{pad(minute)}</Text>
-      </View>
-      <View style={styles.pickerRow}>
-        <DrumRoll items={HOURS} selected={hour} onSelect={setHour} label="時" />
-        <Text style={styles.colon}>:</Text>
-        <DrumRoll items={MINUTES} selected={minute} onSelect={setMinute} label="分" />
-      </View>
+        <Text style={styles.timeHint}>タップして変更</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.primaryButton, setting && styles.primaryButtonDisabled]}
@@ -298,6 +357,15 @@ export default function HomeScreen() {
           })}
         </ScrollView>
       </PickerModal>
+
+      {/* 時刻選択ボトムシート */}
+      <TimeBottomSheet
+        visible={timeSheetVisible}
+        hour={hour}
+        minute={minute}
+        onConfirm={(h, m) => { setHour(h); setMinute(m); setTimeSheetVisible(false); }}
+        onClose={() => setTimeSheetVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -310,17 +378,9 @@ const styles = StyleSheet.create({
   selectBoxText: { flex: 1, fontSize: 20, color: colors.text, fontWeight: '700' },
   selectBoxPlaceholder: { color: colors.textMuted, fontWeight: '400', fontSize: 16 },
   selectBoxArrow: { fontSize: 12, color: colors.textSecondary },
-  timeDisplay: { alignSelf: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 32, paddingVertical: 10, marginBottom: 14 },
-  timeText: { fontSize: 44, fontWeight: 'bold', color: colors.accent, letterSpacing: 3 },
-  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  colon: { fontSize: 24, fontWeight: 'bold', color: colors.text, marginHorizontal: 8, marginTop: -14 },
-  drumRollContainer: { alignItems: 'center' },
-  drumRollLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-  drumRoll: { width: 72, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  drumRollItem: { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  drumRollSelected: { backgroundColor: colors.accentDark, marginHorizontal: 4, borderRadius: 8 },
-  drumRollText: { fontSize: 19, color: colors.textSecondary, fontWeight: '500' },
-  drumRollSelectedText: { color: '#FFFFFF', fontWeight: 'bold' },
+  timeDisplay: { alignSelf: 'center', alignItems: 'center', paddingVertical: 16, marginBottom: 20 },
+  timeText: { fontSize: 88, fontWeight: 'bold', color: colors.accent, letterSpacing: 4, lineHeight: 100 },
+  timeHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   primaryButton: { backgroundColor: colors.accentDark, paddingVertical: 16, borderRadius: 32, alignItems: 'center', marginBottom: 24 },
   primaryButtonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: 'bold' },
@@ -328,11 +388,11 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
   alarmRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
   alarmRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  alarmRowDate: { fontSize: 13, color: colors.textSecondary },
   alarmRowTime: { fontSize: 20, fontWeight: 'bold', color: colors.text, letterSpacing: 1 },
   alarmRowSite: { fontSize: 13, color: colors.accent, flexShrink: 1 },
   rowDeleteBtn: { padding: 6 },
   rowDeleteBtnText: { fontSize: 16 },
+  // センターモーダル（現場・日付選択）
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 28 },
   modalSheet: { backgroundColor: colors.surfaceLight, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 12 },
@@ -341,4 +401,21 @@ const styles = StyleSheet.create({
   modalItemText: { fontSize: 16, color: colors.text },
   modalItemSub: { fontSize: 14, color: colors.textSecondary },
   modalEmpty: { color: colors.textSecondary, fontSize: 14, textAlign: 'center', paddingVertical: 16, lineHeight: 22 },
+  // ボトムシート
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: colors.surfaceLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingBottom: 24, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  sheetHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 12, marginBottom: 8 },
+  sheetTitle: { fontSize: 15, fontWeight: '700', color: colors.textSecondary, marginBottom: 12 },
+  sheetPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  sheetColon: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginHorizontal: 12, marginTop: -14 },
+  sheetConfirmBtn: { width: '100%', backgroundColor: colors.accentDark, paddingVertical: 14, borderRadius: 28, alignItems: 'center' },
+  sheetConfirmText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  // ドラムロール
+  drumRollContainer: { alignItems: 'center' },
+  drumRollLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
+  drumRoll: { width: 80, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  drumRollItem: { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  drumRollSelected: { backgroundColor: colors.accentDark, marginHorizontal: 4, borderRadius: 8 },
+  drumRollText: { fontSize: 22, color: colors.textSecondary, fontWeight: '500' },
+  drumRollSelectedText: { color: '#FFFFFF', fontWeight: 'bold' },
 });
