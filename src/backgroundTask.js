@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import notifee, { AndroidImportance } from '@notifee/react-native';
-import { getAlarmsForDate, getTomorrow, getSettings } from './storage';
+import { getSettings } from './storage';
+import { getAlarms, formatDateKey } from './alarmData';
 
 export const TASK_NAME = 'GENBA_ALARM_BACKGROUND_CHECK';
 export const CHANNEL_ID = 'genba_alarm';
@@ -36,10 +37,14 @@ TaskManager.defineTask(TASK_NAME, async () => {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
-    const alarms = await getAlarmsForDate(getTomorrow());
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = formatDateKey(tomorrow);
+    const alarms = await getAlarms();
+    const hasTomorrow = alarms.some((a) => a.date === tomorrowKey);
     await AsyncStorage.setItem(LAST_PROMPT_DATE_KEY, today);
 
-    if (alarms.length > 0) {
+    if (hasTomorrow) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
