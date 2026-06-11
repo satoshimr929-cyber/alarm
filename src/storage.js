@@ -44,9 +44,11 @@ export async function getSettings() {
       notifyHour: parsed.notifyHour ?? parsed.autoSetHour ?? 22,
       notifyMinute: parsed.notifyMinute ?? parsed.autoSetMinute ?? 0,
       extraAlarms: parsed.extraAlarms ?? defaultExtraAlarms(),
+      ringtoneUri: parsed.ringtoneUri ?? '',
+      ringtoneTitle: parsed.ringtoneTitle ?? '',
     };
   } catch {
-    return { notifyHour: 22, notifyMinute: 0, extraAlarms: defaultExtraAlarms() };
+    return { notifyHour: 22, notifyMinute: 0, extraAlarms: defaultExtraAlarms(), ringtoneUri: '', ringtoneTitle: '' };
   }
 }
 

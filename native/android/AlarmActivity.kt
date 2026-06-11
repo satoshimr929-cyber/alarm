@@ -37,9 +37,10 @@ class AlarmActivity : Activity() {
 
         val label = intent.getStringExtra("label") ?: "アラーム"
         val alarmId = intent.getIntExtra("alarmId", 0)
+        val ringtoneUri = intent.getStringExtra("ringtoneUri") ?: ""
 
         buildUI(label, alarmId)
-        startAlarmSound()
+        startAlarmSound(ringtoneUri)
         startVibration()
     }
 
@@ -107,9 +108,13 @@ class AlarmActivity : Activity() {
         setContentView(root)
     }
 
-    private fun startAlarmSound() {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+    private fun startAlarmSound(ringtoneUri: String = "") {
+        val uri = if (ringtoneUri.isNotEmpty()) {
+            android.net.Uri.parse(ringtoneUri)
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
         ringtone = RingtoneManager.getRingtone(applicationContext, uri)
         ringtone?.audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)

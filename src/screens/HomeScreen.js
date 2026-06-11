@@ -234,6 +234,7 @@ export default function HomeScreen() {
         siteName: selectedSite?.name || '',
         wakeTime,
         extraAlarms: settings.extraAlarms,
+        ringtoneUri: settings.ringtoneUri || '',
       });
       setAlarms(await getAlarms());
       showToast(overwritten ? `${dateLabel(date)} ${wakeTime} に上書きしました` : `${dateLabel(date)} ${wakeTime} をセットしました`);

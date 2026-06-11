@@ -12,6 +12,7 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getIntExtra("alarmId", 0)
         val label = intent.getStringExtra("label") ?: "アラーム"
+        val ringtoneUri = intent.getStringExtra("ringtoneUri") ?: ""
 
         ensureChannel(context)
 
@@ -23,6 +24,7 @@ class AlarmReceiver : BroadcastReceiver() {
             )
             putExtra("alarmId", alarmId)
             putExtra("label", label)
+            putExtra("ringtoneUri", ringtoneUri)
         }
 
         val fullScreenPi = PendingIntent.getActivity(

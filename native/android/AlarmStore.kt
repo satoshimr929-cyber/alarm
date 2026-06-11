@@ -8,7 +8,7 @@ object AlarmStore {
     private const val PREF_NAME = "genba_native_alarms"
     private const val KEY_ALARMS = "alarms"
 
-    data class AlarmData(val id: Int, val timestamp: Long, val label: String)
+    data class AlarmData(val id: Int, val timestamp: Long, val label: String, val ringtoneUri: String = "")
 
     fun saveAlarm(context: Context, alarm: AlarmData) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -30,7 +30,12 @@ object AlarmStore {
             val arr = JSONArray(prefs.getString(KEY_ALARMS, "[]") ?: "[]")
             (0 until arr.length()).map {
                 val o = arr.getJSONObject(it)
-                AlarmData(o.getInt("id"), o.getLong("timestamp"), o.getString("label"))
+                AlarmData(
+                    o.getInt("id"),
+                    o.getLong("timestamp"),
+                    o.getString("label"),
+                    o.optString("ringtoneUri", "")
+                )
             }
         } catch (e: Exception) { emptyList() }
     }
@@ -42,6 +47,7 @@ object AlarmStore {
                 put("id", a.id)
                 put("timestamp", a.timestamp)
                 put("label", a.label)
+                put("ringtoneUri", a.ringtoneUri)
             })
         }
         return arr.toString()

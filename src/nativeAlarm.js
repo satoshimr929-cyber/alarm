@@ -21,9 +21,9 @@ export function makeTimestamp(hour, minute) {
   return d.getTime();
 }
 
-export async function setAlarm(id, timestamp, label) {
+export async function setAlarm(id, timestamp, label, ringtoneUri = '') {
   if (Platform.OS !== 'android') throw new Error('Android only');
-  return GENBAAlarmManager.setAlarm(id, timestamp, label);
+  return GENBAAlarmManager.setAlarm(id, timestamp, label, ringtoneUri);
 }
 
 export async function cancelAlarm(id) {
@@ -54,4 +54,19 @@ export async function canUseFullScreenIntent() {
 export async function openFullScreenIntentSettings() {
   if (Platform.OS !== 'android') return;
   return GENBAAlarmManager.openFullScreenIntentSettings();
+}
+
+export async function getRingtoneList() {
+  if (Platform.OS !== 'android') return [];
+  return GENBAAlarmManager.getRingtoneList();
+}
+
+export async function playRingtone(uri) {
+  if (Platform.OS !== 'android') return;
+  return GENBAAlarmManager.playRingtone(uri);
+}
+
+export async function stopRingtone() {
+  if (Platform.OS !== 'android') return;
+  return GENBAAlarmManager.stopRingtone();
 }

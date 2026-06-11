@@ -72,7 +72,7 @@ export async function cleanupPastAlarms() {
 }
 
 // 1日1アラーム: 同日があれば上書き（旧ネイティブアラームはキャンセル）
-export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }) {
+export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [], ringtoneUri = '' }) {
   const alarms = await cleanupPastAlarms();
   const existing = alarms.find((a) => a.date === date);
   if (existing) {
@@ -86,7 +86,7 @@ export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }
 
   const prefix = siteName ? `${siteName} ` : '';
   const nativeId = makeAlarmId();
-  await nativeSetAlarm(nativeId, ts, `${prefix}${wakeTime}`);
+  await nativeSetAlarm(nativeId, ts, `${prefix}${wakeTime}`, ringtoneUri);
 
   const alarmIds = [nativeId];
   const enabledExtras = extraAlarms.filter((e) => e.enabled);
@@ -95,7 +95,7 @@ export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }
     if (extraTs > Date.now()) {
       const extraId = makeAlarmId();
       const sign = extra.offset < 0 ? `${Math.abs(extra.offset)}分前` : `${extra.offset}分後`;
-      await nativeSetAlarm(extraId, extraTs, `${prefix}${wakeTime}（${sign}）`);
+      await nativeSetAlarm(extraId, extraTs, `${prefix}${wakeTime}（${sign}）`, ringtoneUri);
       alarmIds.push(extraId);
     }
   }
@@ -106,6 +106,7 @@ export async function upsertAlarm({ date, siteName, wakeTime, extraAlarms = [] }
     siteName,
     wakeTime,
     extraAlarms,
+    ringtoneUri,
     alarmIds,
   };
 
