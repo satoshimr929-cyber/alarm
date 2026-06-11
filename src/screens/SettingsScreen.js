@@ -1,6 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  FlatList,
   Modal,
   Platform,
   ScrollView,
@@ -10,15 +12,18 @@ import {
   TextInput,
   ToastAndroid,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getSites, saveSites } from '../alarmData';
 import { getSettings, saveSettings, defaultExtraAlarms } from '../storage';
+import { getRingtoneList, playRingtone, stopRingtone } from '../nativeAlarm';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
+const SHEET_HEIGHT = 420;
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -133,13 +138,100 @@ function NotifyModal({ visible, hour, minute, onSave, onClose }) {
   );
 }
 
+function RingtoneSheet({ visible, ringtones, selectedUri, onSelect, onClose }) {
+  const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const [playingUri, setPlayingUri] = useState(null);
+
+  const prevVisible = useRef(false);
+  if (visible && !prevVisible.current) {
+    setPlayingUri(null);
+  }
+  prevVisible.current = visible;
+
+  if (visible) {
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 20 }).start();
+  } else {
+    Animated.timing(slideAnim, { toValue: SHEET_HEIGHT, duration: 200, useNativeDriver: true }).start();
+  }
+
+  async function handlePreview(uri) {
+    if (playingUri === uri) {
+      await stopRingtone();
+      setPlayingUri(null);
+    } else {
+      await playRingtone(uri);
+      setPlayingUri(uri);
+    }
+  }
+
+  async function handleSelect(item) {
+    await stopRingtone();
+    setPlayingUri(null);
+    onSelect(item);
+  }
+
+  async function handleClose() {
+    await stopRingtone();
+    setPlayingUri(null);
+    onClose();
+  }
+
+  const DEFAULT_ITEM = { title: 'システムデフォルト', uri: '' };
+  const allItems = [DEFAULT_ITEM, ...ringtones];
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View style={styles.sheetOverlay} />
+      </TouchableWithoutFeedback>
+      <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.sheetHandle} />
+        <Text style={styles.sheetTitle}>アラーム音を選択</Text>
+        <FlatList
+          data={allItems}
+          keyExtractor={(item) => item.uri}
+          style={styles.ringtoneList}
+          renderItem={({ item }) => {
+            const isSelected = item.uri === selectedUri;
+            const isPlaying = item.uri === playingUri && item.uri !== '';
+            return (
+              <TouchableOpacity
+                style={[styles.ringtoneRow, isSelected && styles.ringtoneRowSelected]}
+                onPress={() => handleSelect(item)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.ringtoneTitle, isSelected && styles.ringtoneTitleSelected]} numberOfLines={1}>
+                  {isSelected ? '✓ ' : ''}{item.title}
+                </Text>
+                {item.uri !== '' && (
+                  <TouchableOpacity
+                    style={styles.previewBtn}
+                    onPress={() => handlePreview(item.uri)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.previewBtnText}>{isPlaying ? '⏹' : '▶'}</Text>
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </Animated.View>
+    </Modal>
+  );
+}
+
 export default function SettingsScreen() {
   const [sites, setSites] = useState([]);
   const [notifyHour, setNotifyHour] = useState(22);
   const [notifyMinute, setNotifyMinute] = useState(0);
   const [extraAlarms, setExtraAlarms] = useState(defaultExtraAlarms());
+  const [ringtoneUri, setRingtoneUri] = useState('');
+  const [ringtoneTitle, setRingtoneTitle] = useState('システムデフォルト');
+  const [ringtones, setRingtones] = useState([]);
   const [siteModal, setSiteModal] = useState({ visible: false, site: null });
   const [notifyModalVisible, setNotifyModalVisible] = useState(false);
+  const [ringtoneSheetVisible, setRingtoneSheetVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -149,9 +241,34 @@ export default function SettingsScreen() {
         setNotifyHour(s.notifyHour);
         setNotifyMinute(s.notifyMinute);
         setExtraAlarms(s.extraAlarms);
+        setRingtoneUri(s.ringtoneUri || '');
+        setRingtoneTitle(s.ringtoneTitle || 'システムデフォルト');
       })();
     }, [])
   );
+
+  async function openRingtoneSheet() {
+    if (ringtones.length === 0) {
+      try {
+        const list = await getRingtoneList();
+        setRingtones(list);
+      } catch {
+        setRingtones([]);
+      }
+    }
+    setRingtoneSheetVisible(true);
+  }
+
+  async function handleSelectRingtone(item) {
+    const uri = item.uri;
+    const title = item.uri === '' ? 'システムデフォルト' : item.title;
+    setRingtoneUri(uri);
+    setRingtoneTitle(title);
+    setRingtoneSheetVisible(false);
+    const s = await getSettings();
+    await saveSettings({ ...s, ringtoneUri: uri, ringtoneTitle: title });
+    showToast(`「${title}」に設定しました`);
+  }
 
   async function handleSaveSite({ name, defaultWakeTime }) {
     let next;
@@ -235,6 +352,17 @@ export default function SettingsScreen() {
         ))
       )}
 
+      {/* アラーム音 */}
+      <Text style={[styles.sectionLabel, { marginTop: 32 }]}>アラーム音</Text>
+      <TouchableOpacity style={styles.settingRow} onPress={openRingtoneSheet}>
+        <Text style={styles.settingRowLabel}>🔔 サウンド</Text>
+        <View style={styles.settingRowRight}>
+          <Text style={styles.settingRowValue} numberOfLines={1}>{ringtoneTitle}</Text>
+          <Text style={styles.settingRowArrow}>›</Text>
+        </View>
+      </TouchableOpacity>
+      <Text style={styles.settingRowHint}>アラーム鳴動時に使用する音を選択します</Text>
+
       {/* 追加アラーム */}
       <Text style={[styles.sectionLabel, { marginTop: 32 }]}>追加アラーム</Text>
       <Text style={styles.extraHint}>起床時刻の前後に自動でアラームを追加します</Text>
@@ -287,6 +415,13 @@ export default function SettingsScreen() {
         onSave={handleSaveNotify}
         onClose={() => setNotifyModalVisible(false)}
       />
+      <RingtoneSheet
+        visible={ringtoneSheetVisible}
+        ringtones={ringtones}
+        selectedUri={ringtoneUri}
+        onSelect={handleSelectRingtone}
+        onClose={() => setRingtoneSheetVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -308,8 +443,8 @@ const styles = StyleSheet.create({
   deleteBtnText: { fontSize: 18 },
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 16, borderWidth: 1, borderColor: colors.border },
   settingRowLabel: { fontSize: 16, color: colors.text, fontWeight: '500' },
-  settingRowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  settingRowValue: { fontSize: 16, color: colors.accent, fontWeight: '600' },
+  settingRowRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' },
+  settingRowValue: { fontSize: 15, color: colors.accent, fontWeight: '600', maxWidth: 180 },
   settingRowArrow: { fontSize: 20, color: colors.textSecondary },
   settingRowHint: { fontSize: 11, color: colors.textMuted, marginTop: 6, marginLeft: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
@@ -336,4 +471,16 @@ const styles = StyleSheet.create({
   extraGroupLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   extraRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   extraRowText: { fontSize: 15, color: colors.text },
+  // ボトムシート（アラーム音）
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: colors.surfaceLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 0, paddingBottom: 24, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  sheetHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 12, marginBottom: 8 },
+  sheetTitle: { fontSize: 15, fontWeight: '700', color: colors.textSecondary, marginBottom: 8 },
+  ringtoneList: { width: '100%' },
+  ringtoneRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  ringtoneRowSelected: { backgroundColor: colors.surface },
+  ringtoneTitle: { flex: 1, fontSize: 15, color: colors.text },
+  ringtoneTitleSelected: { color: colors.accent, fontWeight: '700' },
+  previewBtn: { paddingHorizontal: 10, paddingVertical: 4 },
+  previewBtnText: { fontSize: 16, color: colors.textSecondary },
 });
