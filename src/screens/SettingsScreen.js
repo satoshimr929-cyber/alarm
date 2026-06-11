@@ -251,7 +251,14 @@ export default function SettingsScreen() {
     if (ringtones.length === 0) {
       try {
         const list = await getRingtoneList();
-        setRingtones(list);
+        // 同名の音が複数登録されている端末があるためタイトルで重複排除
+        const seen = new Set();
+        const unique = list.filter((r) => {
+          if (seen.has(r.title)) return false;
+          seen.add(r.title);
+          return true;
+        });
+        setRingtones(unique);
       } catch {
         setRingtones([]);
       }
