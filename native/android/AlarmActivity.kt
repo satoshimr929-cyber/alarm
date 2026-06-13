@@ -31,7 +31,6 @@ class AlarmActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ロック画面上に表示・画面を点灯
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -80,7 +79,6 @@ class AlarmActivity : Activity() {
             ).also { it.bottomMargin = (8 * dp).toInt() }
         }
 
-        // 現在時刻（大きく目立つ）
         val currentClock = TextView(this).apply {
             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             textSize = 80f
@@ -94,7 +92,6 @@ class AlarmActivity : Activity() {
         }
         clockView = currentClock
 
-        // 起床時刻ラベル（小さめ）
         val wakeLabel = TextView(this).apply {
             text = "起床 $label"
             textSize = 22f
@@ -166,7 +163,6 @@ class AlarmActivity : Activity() {
             getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
         }
         vibrator = v
-        // 1秒振動 → 0.5秒休止 を繰り返す
         val pattern = longArrayOf(0, 1000, 500)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val attrs = AudioAttributes.Builder()
@@ -195,66 +191,6 @@ class AlarmActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(clockTick)
-        ringtone?.stop()
-        vibrator?.cancel()
-    }
-}
-
-
-    private fun startAlarmSound(ringtoneUri: String = "") {
-        val uri = if (ringtoneUri.isNotEmpty()) {
-            android.net.Uri.parse(ringtoneUri)
-        } else {
-            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        }
-        ringtone = RingtoneManager.getRingtone(applicationContext, uri)
-        ringtone?.audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            ringtone?.isLooping = true
-        }
-        ringtone?.play()
-    }
-
-    private fun startVibration() {
-        val v: android.os.Vibrator = if (Build.VERSION.SDK_INT >= 31) {
-            val vm = getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager
-            vm.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
-        }
-        vibrator = v
-        // 1秒振動 → 0.5秒休止 を繰り返す
-        val pattern = longArrayOf(0, 1000, 500)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            @Suppress("DEPRECATION")
-            v.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0), attrs)
-        } else {
-            @Suppress("DEPRECATION")
-            v.vibrate(pattern, 0)
-        }
-    }
-
-    private fun stopAndFinish(alarmId: Int) {
-        ringtone?.stop()
-        ringtone = null
-        vibrator?.cancel()
-        vibrator = null
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(alarmId)
-        AlarmStore.removeAlarm(applicationContext, alarmId)
-        finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
         ringtone?.stop()
         vibrator?.cancel()
     }
