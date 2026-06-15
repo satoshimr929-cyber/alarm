@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getSites, saveSites } from '../alarmData';
 import { getSettings, saveSettings, defaultExtraAlarms } from '../storage';
 import { getRingtoneList, playRingtone, stopRingtone } from '../nativeAlarm';
+import { schedulePromptNotification } from '../backgroundTask';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -322,6 +323,7 @@ export default function SettingsScreen() {
     setNotifyHour(h);
     setNotifyMinute(m);
     setNotifyModalVisible(false);
+    await schedulePromptNotification(h, m);
     showToast(`促し通知を ${pad(h)}:${pad(m)} に設定しました`);
   }
 

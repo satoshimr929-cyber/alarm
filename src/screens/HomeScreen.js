@@ -32,7 +32,7 @@ import {
   parseTime,
 } from '../alarmData';
 import { getSettings } from '../storage';
-import { registerBackgroundTask, ensureChannel } from '../backgroundTask';
+import { registerBackgroundTask, ensureChannel, cancelPromptIfAlarmSet } from '../backgroundTask';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -237,6 +237,7 @@ export default function HomeScreen() {
         ringtoneUri: settings.ringtoneUri || '',
       });
       setAlarms(await getAlarms());
+      await cancelPromptIfAlarmSet();
       showToast(overwritten ? `${dateLabel(date)} ${wakeTime} に上書きしました` : `${dateLabel(date)} ${wakeTime} をセットしました`);
     } catch (e) {
       if (e.message?.includes('PERMISSION_DENIED')) {
