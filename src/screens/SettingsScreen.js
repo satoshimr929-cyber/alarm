@@ -19,7 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getSites, saveSites } from '../alarmData';
 import { getSettings, saveSettings, defaultExtraAlarms } from '../storage';
 import { getRingtoneList, playRingtone, stopRingtone } from '../nativeAlarm';
-import { schedulePromptNotification } from '../backgroundTask';
+import { schedulePromptNotification, syncPromptNotification } from '../backgroundTask';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -323,7 +323,9 @@ export default function SettingsScreen() {
     setNotifyHour(h);
     setNotifyMinute(m);
     setNotifyModalVisible(false);
+    // 新しい時刻で予約し直したうえで、明日のアラーム有無に合わせて整合を取る
     await schedulePromptNotification(h, m);
+    await syncPromptNotification();
     showToast(`促し通知を ${pad(h)}:${pad(m)} に設定しました`);
   }
 

@@ -32,7 +32,7 @@ import {
   parseTime,
 } from '../alarmData';
 import { getSettings } from '../storage';
-import { registerBackgroundTask, ensureChannel, cancelPromptIfAlarmSet } from '../backgroundTask';
+import { registerBackgroundTask, ensureChannel, syncPromptNotification } from '../backgroundTask';
 import { colors } from '../theme';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -237,7 +237,7 @@ export default function HomeScreen() {
         ringtoneUri: settings.ringtoneUri || '',
       });
       setAlarms(await getAlarms());
-      await cancelPromptIfAlarmSet();
+      await syncPromptNotification();
       showToast(overwritten ? `${dateLabel(date)} ${wakeTime} に上書きしました` : `${dateLabel(date)} ${wakeTime} をセットしました`);
     } catch (e) {
       if (e.message?.includes('PERMISSION_DENIED')) {
@@ -258,6 +258,7 @@ export default function HomeScreen() {
         text: '削除する', style: 'destructive',
         onPress: async () => {
           setAlarms(await deleteAlarm(alarm.id));
+          await syncPromptNotification();
           showToast('削除しました');
         },
       },

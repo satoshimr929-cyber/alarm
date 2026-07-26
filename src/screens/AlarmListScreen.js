@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { cleanupPastAlarms, deleteAlarm, formatDateKey } from '../alarmData';
+import { syncPromptNotification } from '../backgroundTask';
 import { colors } from '../theme';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -50,6 +51,7 @@ export default function AlarmListScreen() {
         text: '削除する', style: 'destructive',
         onPress: async () => {
           setAlarms(await deleteAlarm(alarm.id));
+          await syncPromptNotification();
           showToast('削除しました');
         },
       },

@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import notifee, { AndroidImportance, TriggerType, RepeatFrequency } from '@notifee/react-native';
@@ -27,28 +26,20 @@ async function hasTomorrowAlarm() {
   return alarms.some((a) => a.date === tomorrowKey);
 }
 
-// 今夜または翌日の指定時刻のタイムスタンプを返す
+// 今日の指定時刻。すでに過ぎていたら翌日の同時刻
 function nextTriggerTimestamp(hour, minute) {
   const now = new Date();
   const target = new Date();
   target.setHours(hour, minute, 0, 0);
-  // すでに過ぎていたら翌日にする
   if (target <= now) {
     target.setDate(target.getDate() + 1);
   }
   return target.getTime();
 }
 
-// 促し通知を指定時刻にスケジュール（毎日繰り返し）
+// 促し通知を指定時刻に予約（毎日繰り返し）。既存の予約は置き換える
 export async function schedulePromptNotification(hour, minute) {
   await ensureChannel();
-  await notifee.cancelNotification(NOTIFICATION_ID);
-  const trigger = {
-    type: TriggerType.TIMESTAMP,
-    timestamp: nextTriggerTimestamp(hour, minute),
-    repeatFrequency: RepeatFrequency.DAILY,
-    alarmManager: { allowWhileIdle: true },
-  };
   await notifee.createTriggerNotification(
     {
       id: NOTIFICATION_ID,
@@ -57,24 +48,39 @@ export async function schedulePromptNotification(hour, minute) {
       android: {
         channelId: CHANNEL_ID,
         importance: AndroidImportance.HIGH,
-        pressAction: { id: 'default' },
+        autoCancel: true,
+        // launchActivity を指定しないとタップしてもアプリが起動しない
+        pressAction: { id: 'default', launchActivity: 'default' },
       },
     },
-    trigger
+    {
+      type: TriggerType.TIMESTAMP,
+      timestamp: nextTriggerTimestamp(hour, minute),
+      repeatFrequency: RepeatFrequency.DAILY,
+      alarmManager: { allowWhileIdle: true },
+    }
   );
 }
 
-// 明日アラーム登録済みなら通知をキャンセル
-export async function cancelPromptIfAlarmSet() {
+// 明日のアラームの有無に応じて促し通知の予約状態を合わせる。
+// 何度呼んでも安全（予約済みならそのまま残す）。
+export async function syncPromptNotification() {
   if (await hasTomorrowAlarm()) {
-    await notifee.cancelNotification(NOTIFICATION_ID);
+    // cancelNotification は繰り返しトリガーごと消すので用途別に呼び分ける
+    await notifee.cancelTriggerNotification(NOTIFICATION_ID);
+    await notifee.cancelDisplayedNotification(NOTIFICATION_ID);
+    return;
   }
+  const pending = await notifee.getTriggerNotificationIds();
+  if (pending.includes(NOTIFICATION_ID)) return;
+  const settings = await getSettings();
+  await schedulePromptNotification(settings.notifyHour, settings.notifyMinute);
 }
 
-// バックグラウンドタスク: 明日のアラームが登録済みなら通知をキャンセルするだけ
+// バックグラウンドタスク: 予約状態を実際のアラーム登録状況に追従させる
 TaskManager.defineTask(TASK_NAME, async () => {
   try {
-    await cancelPromptIfAlarmSet();
+    await syncPromptNotification();
     return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch {
     return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -91,9 +97,7 @@ export async function registerBackgroundTask() {
         startOnBoot: true,
       });
     }
-    // 起動時に通知をスケジュール（未登録なら）
-    const settings = await getSettings();
-    await schedulePromptNotification(settings.notifyHour, settings.notifyMinute);
+    await syncPromptNotification();
   } catch (e) {
     console.warn('Background task registration failed:', e);
   }
