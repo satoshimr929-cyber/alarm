@@ -75,8 +75,10 @@ export async function schedulePromptNotification(hour, minute) {
       type: TriggerType.TIMESTAMP,
       timestamp: nextTriggerTimestamp(hour, minute),
       repeatFrequency: RepeatFrequency.DAILY,
-      // allowWhileIdle は非推奨。setExactAndAllowWhileIdle + RTC_WAKEUP になる
-      alarmManager: { type: AlarmType.SET_EXACT_AND_ALLOW_WHILE_IDLE },
+      // setAlarmClock は Doze もメーカー製の省電力制御も免除される最優先の
+      // アラーム種別。副作用としてステータスバーに時計アイコンが常時出る。
+      // アイコンが不要なら SET_EXACT_AND_ALLOW_WHILE_IDLE に戻せばよい。
+      alarmManager: { type: AlarmType.SET_ALARM_CLOCK },
     }
   );
 
