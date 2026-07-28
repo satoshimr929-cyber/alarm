@@ -1,8 +1,9 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import notifee, { AndroidImportance, TriggerType, RepeatFrequency } from '@notifee/react-native';
+import notifee, { AlarmType, AndroidImportance, TriggerType, RepeatFrequency } from '@notifee/react-native';
 import { getSettings } from './storage';
 import { getAlarms, formatDateKey } from './alarmData';
+import { canScheduleExactAlarms } from './nativeAlarm';
 
 export const TASK_NAME = 'GENBA_ALARM_BACKGROUND_CHECK';
 export const CHANNEL_ID = 'genba_alarm';
@@ -37,9 +38,26 @@ function nextTriggerTimestamp(hour, minute) {
   return target.getTime();
 }
 
-// 促し通知を指定時刻に予約（毎日繰り返し）。既存の予約は置き換える
+// 促し通知を指定時刻に予約（毎日繰り返し）。既存の予約は置き換える。
+// 予約できたかどうかを返す。
 export async function schedulePromptNotification(hour, minute) {
   await ensureChannel();
+
+  // notifee は Android 12+ で SCHEDULE_EXACT_ALARM が無いと、
+  // 標準エラーに出すだけで何も予約せずに終わる（サイレント失敗）。
+  // 先に確認して呼び出し側が気付けるようにする。
+  let exactAllowed = true;
+  try {
+    exactAllowed = await canScheduleExactAlarms();
+  } catch {
+    // ネイティブモジュールが取れない場合は予約を試みる方に倒す
+    exactAllowed = true;
+  }
+  if (!exactAllowed) {
+    console.warn('SCHEDULE_EXACT_ALARM 未許可のため促し通知を予約できません');
+    return false;
+  }
+
   await notifee.createTriggerNotification(
     {
       id: NOTIFICATION_ID,
@@ -57,9 +75,18 @@ export async function schedulePromptNotification(hour, minute) {
       type: TriggerType.TIMESTAMP,
       timestamp: nextTriggerTimestamp(hour, minute),
       repeatFrequency: RepeatFrequency.DAILY,
-      alarmManager: { allowWhileIdle: true },
+      // allowWhileIdle は非推奨。setExactAndAllowWhileIdle + RTC_WAKEUP になる
+      alarmManager: { type: AlarmType.SET_EXACT_AND_ALLOW_WHILE_IDLE },
     }
   );
+
+  // 予約が実際に登録されたか確認する
+  const pending = await notifee.getTriggerNotificationIds();
+  if (!pending.includes(NOTIFICATION_ID)) {
+    console.warn('促し通知の予約が登録されませんでした');
+    return false;
+  }
+  return true;
 }
 
 // 明日のアラームの有無に応じて促し通知の予約状態を合わせる。
